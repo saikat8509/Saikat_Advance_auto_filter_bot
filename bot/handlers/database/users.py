@@ -1,92 +1,134 @@
+import time
 from datetime import datetime, timedelta
-from pymongo import MongoClient
-from config import MONGO_DB_URIS
+from pymongo import UpdateOne
+from config import MONGO_DB, REF_BONUS_DAYS
+from .db import get_collection
 
-# Connect to all MongoDB URIs and choose the first one that's available
-clients = []
-user_collection = None
-
-for uri in MONGO_DB_URIS:
-    try:
-        client = MongoClient(uri)
-        client.admin.command('ping')  # Test connection
-        db = client['autofilterbot']
-        user_collection = db['users']
-        break
-    except Exception:
-        continue
+users_col = get_collection(MONGO_DB, "users")
 
 
-def add_user(user_id: int):
-    if not user_collection:
-        return
-    if not user_collection.find_one({"user_id": user_id}):
-        user_collection.insert_one({
+# ------------------ USER MANAGEMENT ------------------
+
+async def add_user(user_id: int, first_name: str, referrer_id: int = None):
+    user = await users_col.find_one({"user_id": user_id})
+    if user:
+        await users_col.update_one({"user_id": user_id}, {
+            "$set": {"first_name": first_name}
+        })
+    else:
+        data = {
             "user_id": user_id,
+            "first_name": first_name,
+            "join_date": datetime.utcnow(),
+            "is_banned": False,
             "is_premium": False,
             "premium_expiry": None,
-            "referred_by": None,
-            "referrals": 0,
-            "joined": datetime.utcnow(),
+            "referrer_id": referrer_id,
             "token_expiry": None
-        })
+        }
+        await users_col.insert_one(data)
+        if referrer_id:
+            await add_referral_bonus(referrer_id)
 
 
-def set_premium(user_id: int, days: int):
-    if not user_collection:
-        return
-    expiry_date = datetime.utcnow() + timedelta(days=days)
-    user_collection.update_one({"user_id": user_id}, {"$set": {
-        "is_premium": True,
-        "premium_expiry": expiry_date
-    }})
+async def get_user(user_id: int):
+    return await users_col.find_one({"user_id": user_id})
 
 
-def check_premium(user_id: int):
-    if not user_collection:
+async def get_all_users():
+    return users_col.find({"is_banned": False})
+
+
+async def total_users_count():
+    return await users_col.count_documents({})
+
+
+# ------------------ PREMIUM MANAGEMENT ------------------
+
+async def set_premium(user_id: int, days: int):
+    expiry = datetime.utcnow() + timedelta(days=days)
+    await users_col.update_one(
+        {"user_id": user_id},
+        {"$set": {"is_premium": True, "premium_expiry": expiry}}
+    )
+
+
+async def check_premium(user_id: int):
+    user = await get_user(user_id)
+    if not user:
         return False
-    user = user_collection.find_one({"user_id": user_id})
-    if user and user.get("is_premium"):
-        if user.get("premium_expiry") and datetime.utcnow() < user["premium_expiry"]:
-            return True
-        else:
-            user_collection.update_one({"user_id": user_id}, {"$set": {"is_premium": False}})
+    expiry = user.get("premium_expiry")
+    if expiry and expiry > datetime.utcnow():
+        return True
+    await users_col.update_one(
+        {"user_id": user_id},
+        {"$set": {"is_premium": False, "premium_expiry": None}}
+    )
     return False
 
 
-def set_token_validity(user_id: int, hours: int = 24):
-    if not user_collection:
+async def expire_premium_users():
+    now = datetime.utcnow()
+    await users_col.update_many(
+        {"is_premium": True, "premium_expiry": {"$lte": now}},
+        {"$set": {"is_premium": False, "premium_expiry": None}}
+    )
+
+
+# ------------------ REFERRAL BONUS ------------------
+
+async def add_referral_bonus(referrer_id: int):
+    user = await get_user(referrer_id)
+    if not user:
         return
-    expiry = datetime.utcnow() + timedelta(hours=hours)
-    user_collection.update_one({"user_id": user_id}, {"$set": {"token_expiry": expiry}})
+    current_expiry = user.get("premium_expiry")
+    bonus = timedelta(days=REF_BONUS_DAYS)
+    if current_expiry and current_expiry > datetime.utcnow():
+        new_expiry = current_expiry + bonus
+    else:
+        new_expiry = datetime.utcnow() + bonus
+    await users_col.update_one(
+        {"user_id": referrer_id},
+        {"$set": {"is_premium": True, "premium_expiry": new_expiry}}
+    )
 
 
-def has_valid_token(user_id: int):
-    if not user_collection:
+# ------------------ TOKEN SYSTEM ------------------
+
+async def activate_token(user_id: int):
+    expiry = datetime.utcnow() + timedelta(hours=24)
+    await users_col.update_one(
+        {"user_id": user_id},
+        {"$set": {"token_expiry": expiry}}
+    )
+
+
+async def check_token(user_id: int):
+    user = await get_user(user_id)
+    if not user:
         return False
-    user = user_collection.find_one({"user_id": user_id})
-    expiry = user.get("token_expiry") if user else None
-    return expiry and datetime.utcnow() < expiry
+    token_expiry = user.get("token_expiry")
+    if token_expiry and token_expiry > datetime.utcnow():
+        return True
+    return False
 
 
-def set_referral(user_id: int, referred_by: int):
-    if not user_collection:
-        return
-    user = user_collection.find_one({"user_id": user_id})
-    if user and not user.get("referred_by"):
-        user_collection.update_one({"user_id": user_id}, {"$set": {"referred_by": referred_by}})
-        user_collection.update_one({"user_id": referred_by}, {"$inc": {"referrals": 1}})
+# ------------------ BAN MANAGEMENT ------------------
+
+async def ban_user(user_id: int):
+    await users_col.update_one({"user_id": user_id}, {"$set": {"is_banned": True}})
 
 
-def get_referral_count(user_id: int):
-    if not user_collection:
-        return 0
-    user = user_collection.find_one({"user_id": user_id})
-    return user.get("referrals", 0) if user else 0
+async def unban_user(user_id: int):
+    await users_col.update_one({"user_id": user_id}, {"$set": {"is_banned": False}})
 
 
-def get_user_info(user_id: int):
-    if not user_collection:
-        return None
-    return user_collection.find_one({"user_id": user_id})
+async def is_banned(user_id: int):
+    user = await get_user(user_id)
+    return user.get("is_banned", False) if user else False
 
+
+# ------------------ BROADCAST SUPPORT ------------------
+
+async def get_user_ids_for_broadcast():
+    return users_col.find({"is_banned": False}, {"user_id": 1})
