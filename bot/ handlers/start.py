@@ -1,1 +1,319 @@
-start.py
+from pyrogram import Client, filters
+from pyrogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
+import asyncio
+
+# List of rotating graph.org image URLs for /start command
+START_IMAGES = [
+    "https://graph.org/file/abc123startimage1.png",
+    "https://graph.org/file/abc123startimage2.png",
+    "https://graph.org/file/abc123startimage3.png",
+    "https://graph.org/file/abc123startimage4.png",
+    "https://graph.org/file/abc123startimage5.png",
+    "https://graph.org/file/abc123startimage6.png",
+]
+
+# This dict keeps track of user_id to last shown image index (can be persisted in DB)
+user_start_index = {}
+
+OWNER_ID = 123456789  # Replace with your actual admin Telegram ID
+UPDATE_CHANNEL = "https://t.me/creazy_announcement_hub"
+MOVIE_GROUP = "https://t.me/Creazy_Movie_Surch_Group"
+SUPPORT_GROUP = "https://t.me/Leazy_support_group"
+BOT_USERNAME = "Princess_Surch_Bot"  # your bot's username
+
+
+def get_start_image(user_id: int):
+    # Cycle through START_IMAGES based on user_id for variety, or use persistent DB for actual tracking
+    idx = user_start_index.get(user_id, 0)
+    image_url = START_IMAGES[idx]
+    # Update index for next time
+    user_start_index[user_id] = (idx + 1) % len(START_IMAGES)
+    return image_url
+
+
+def start_main_buttons():
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("⚒️ ADD ME TO YOUR GROUP ⚒️", url=f"https://t.me/{BOT_USERNAME}?startgroup=true"),
+            ],
+            [
+                InlineKeyboardButton("JOIN UPDATE CHANNEL", url=UPDATE_CHANNEL),
+                InlineKeyboardButton("MOVIE GROUP", url=MOVIE_GROUP),
+            ],
+            [
+                InlineKeyboardButton("SUPPORT GROUP", url=SUPPORT_GROUP),
+            ],
+            [
+                InlineKeyboardButton("ABOUT", callback_data="about_cb"),
+                InlineKeyboardButton("PREMIUM MEMBERSHIP & REFERRAL", callback_data="premium_referral_cb"),
+            ],
+            [
+                InlineKeyboardButton("⚒️ Help Menu", callback_data="help_menu_cb"),
+            ],
+        ]
+    )
+
+
+# /start command handler
+@Client.on_message(filters.command("start") & filters.private)
+async def start_handler(client: Client, message: Message):
+    user = message.from_user
+    user_id = user.id
+
+    start_image_url = get_start_image(user_id)
+
+    welcome_text = f"""
+👋 Hi [{user.first_name}](tg://user?id={user_id})!
+
+Welcome to **Creazy Movie Surch Bot** — your ultimate movie search and download assistant. 🎥🍿
+
+Use the buttons below to explore features, join our groups, or upgrade your experience with Premium Membership!
+
+Feel free to ask for help anytime via the Help Menu.
+"""
+
+    # Send photo with caption and inline keyboard
+    await message.reply_photo(
+        photo=start_image_url,
+        caption=welcome_text,
+        reply_markup=start_main_buttons(),
+        parse_mode="md",
+    )
+
+
+# Callback Query Handlers for ABOUT, PREMIUM, HELP MENU and nested buttons
+
+@Client.on_callback_query(filters.regex("^about_cb$"))
+async def about_callback(client: Client, callback_query):
+    about_text = """
+**Creazy Movie Surch Bot**
+
+This bot helps you search and download movies easily with features like:
+
+- Auto-filtering from multiple sources
+- IMDb data integration
+- Premium membership for direct downloads
+- Referral system and trial plans
+- Support and update channels
+
+Created and maintained by [OWNER](tg://user?id={owner_id}).
+"""
+    about_buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("OWNER", url=f"https://t.me/{OWNER_ID}"),
+                InlineKeyboardButton("SUPPORT GROUP", url=SUPPORT_GROUP),
+            ],
+            [
+                InlineKeyboardButton("MOVIE GROUP", url=MOVIE_GROUP),
+            ],
+            [
+                InlineKeyboardButton("BACK", callback_data="start_back_cb"),
+            ],
+        ]
+    )
+    await callback_query.message.edit_text(
+        about_text.format(owner_id=OWNER_ID),
+        reply_markup=about_buttons,
+        parse_mode="md",
+        disable_web_page_preview=True,
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(filters.regex("^premium_referral_cb$"))
+async def premium_referral_callback(client: Client, callback_query):
+    premium_text = """
+**Premium Membership & Referral**
+
+Upgrade for:
+
+- Ads-free experience
+- Direct downloads
+- Fast support
+- Exclusive trial plans
+
+Earn rewards by inviting friends!
+
+Choose an option below.
+"""
+    premium_buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("PREMIUM PLANS", callback_data="premium_plans_cb"),
+                InlineKeyboardButton("REFERRAL", callback_data="referral_cb"),
+            ],
+            [
+                InlineKeyboardButton("TAKE TRIAL", callback_data="take_trial_cb"),
+                InlineKeyboardButton("BACK", callback_data="start_back_cb"),
+            ],
+        ]
+    )
+    await callback_query.message.edit_text(
+        premium_text,
+        reply_markup=premium_buttons,
+        parse_mode="md",
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(filters.regex("^premium_plans_cb$"))
+async def premium_plans_callback(client: Client, callback_query):
+    plans_text = """
+**Premium Plans**
+
+- 1 Week - ₹50
+- 1 Month - ₹150
+- 3 Months - ₹400
+
+UPI ID: `yourupi@bank`
+
+Check your active plan with /myplan
+
+Proof of payments: [Payments Channel](https://t.me/creazy_payments_proof)
+
+Send payment screenshot to @Leazy_Boy for activation.
+"""
+    plans_buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("SEND PAYMENT SCREENSHOT", url="https://t.me/Leazy_Boy"),
+            ],
+            [
+                InlineKeyboardButton("BACK", callback_data="premium_referral_cb"),
+                InlineKeyboardButton("HOME", callback_data="start_back_cb"),
+            ],
+        ]
+    )
+    await callback_query.message.edit_text(
+        plans_text,
+        reply_markup=plans_buttons,
+        parse_mode="md",
+        disable_web_page_preview=True,
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(filters.regex("^referral_cb$"))
+async def referral_callback(client: Client, callback_query):
+    user_id = callback_query.from_user.id
+    # Generate referral link (example)
+    referral_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
+    # TODO: Fetch user's referral count from DB (mock 0 here)
+    referral_count = 0
+
+    referral_text = f"""
+**Referral Program**
+
+Invite friends and earn points!
+
+Your referral link:
+`{referral_link}`
+
+Total referrals: ⌛️ {referral_count}
+"""
+
+    referral_buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("COPY LINK", url=referral_link),
+                InlineKeyboardButton("⌛️ Referrals", callback_data="referral_count_cb"),
+            ],
+            [
+                InlineKeyboardButton("BACK", callback_data="premium_referral_cb"),
+            ],
+        ]
+    )
+    await callback_query.message.edit_text(
+        referral_text,
+        reply_markup=referral_buttons,
+        parse_mode="md",
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(filters.regex("^take_trial_cb$"))
+async def take_trial_callback(client: Client, callback_query):
+    trial_text = """
+**Trial Plan**
+
+Get a free trial premium membership for 1 day!
+
+Contact @Leazy_Boy to activate your trial.
+
+Enjoy exclusive benefits and fast downloads.
+"""
+    trial_buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("BACK", callback_data="premium_referral_cb"),
+                InlineKeyboardButton("HOME", callback_data="start_back_cb"),
+            ],
+        ]
+    )
+    await callback_query.message.edit_text(
+        trial_text,
+        reply_markup=trial_buttons,
+        parse_mode="md",
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(filters.regex("^help_menu_cb$"))
+async def help_menu_callback(client: Client, callback_query):
+    help_text = """
+**Admin Commands Help Menu**
+
+/start - Start bot
+/help - Show help
+/spellcheck - Spell check text
+/imdb - IMDb movie search
+/popular - Show popular movies
+/premium - Premium membership info
+/referral - Referral info
+/myplan - Show your premium plan
+/addpremium - Add premium user (admin only)
+/removepremium - Remove premium user (admin only)
+/stats - Bot usage statistics
+... and many more.
+"""
+    help_buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("BACK", callback_data="start_back_cb"),
+            ]
+        ]
+    )
+    await callback_query.message.edit_text(
+        help_text,
+        reply_markup=help_buttons,
+        parse_mode="md",
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(filters.regex("^start_back_cb$"))
+async def start_back_callback(client: Client, callback_query):
+    user_id = callback_query.from_user.id
+    start_image_url = get_start_image(user_id)
+    welcome_text = f"""
+👋 Hi [{callback_query.from_user.first_name}](tg://user?id={user_id})!
+
+Welcome to **Creazy Movie Surch Bot** — your ultimate movie search and download assistant. 🎥🍿
+
+Use the buttons below to explore features, join our groups, or upgrade your experience with Premium Membership!
+
+Feel free to ask for help anytime via the Help Menu.
+"""
+    await callback_query.message.edit_photo(
+        photo=start_image_url,
+        caption=welcome_text,
+        reply_markup=start_main_buttons(),
+        parse_mode="md",
+    )
+    await callback_query.answer()
