@@ -1,45 +1,51 @@
-# bot/plugins/screenshot.py
+import os
+from pyrogram import filters, Client
+from pyrogram.types import Message
+from config import ENABLE_SCREENSHOT_AI, OCR_PROVIDER, PREMIUM_REWARD_DAYS, OWNER_USERNAME
+from bot.utils.database import add_premium_user, get_user_referrer
+from bot.utils.screenshot_ai import extract_payment_info
+from datetime import datetime, timedelta
 
-from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from config import ADMIN_ID, PAYMENT_PROOF_CHANNEL, TUTORIAL_CHANNEL
-from utils.texts import screenshot_received_text
-
-# Optional: Future OCR logic placeholder
-# from utils.ocr import extract_payment_info, validate_payment
-
-# /screenshot or "Send Payment Screenshot" button
-@Client.on_message(filters.private & (filters.command("screenshot") | filters.photo))
-async def receive_payment_screenshot(client: Client, message: Message):
-    user = message.from_user
-
-    # Ensure it's a photo (payment screenshot)
-    if not message.photo:
-        await message.reply_text("❌ Please send a valid payment *screenshot* as an image.", quote=True)
+@Client.on_message(filters.private & filters.photo & filters.caption & filters.caption_contains("payment"))
+async def handle_payment_screenshot(client: Client, message: Message):
+    if not ENABLE_SCREENSHOT_AI:
+        await message.reply("🛑 Screenshot AI verification is currently disabled.")
         return
 
-    caption = f"🧾 *Payment Screenshot Received!*\n\n👤 User: `{user.first_name}` [`{user.id}`]\n"
-    caption += f"🆔 Username: @{user.username or 'N/A'}"
+    # Acknowledge receipt
+    await message.reply("🧠 Analyzing your screenshot... Please wait.")
 
-    # Forward to admin or proof channel
-    await message.forward(ADMIN_ID)
-    if PAYMENT_PROOF_CHANNEL:
-        await message.copy(PAYMENT_PROOF_CHANNEL, caption=caption)
+    # Download the image
+    file_path = await message.download()
 
-    # Optionally: Perform OCR here to auto-detect payment details
-    # image_path = await message.download()
-    # data = await extract_payment_info(image_path)
-    # valid = await validate_payment(data)
+    # Extract data using OCR
+    extracted = extract_payment_info(file_path, provider=OCR_PROVIDER)
+    if not extracted:
+        await message.reply("❌ Failed to verify payment. Please ensure the screenshot is clear.")
+        return
 
-    await message.reply_text(
-        text=screenshot_received_text,
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("📞 Contact Admin", url=f"https://t.me/{ADMIN_ID.replace('@', '')}"),
-                InlineKeyboardButton("🧾 Tutorial", url=TUTORIAL_CHANNEL),
-            ],
-            [
-                InlineKeyboardButton("🏠 Home", callback_data="go_home")
-            ]
-        ])
-    )
+    user_id = message.from_user.id
+    valid_plan = extracted.get("valid_plan")
+    amount = extracted.get("amount")
+
+    if valid_plan:
+        # Grant premium
+        plan_days = int(valid_plan)
+        expiry = datetime.utcnow() + timedelta(days=plan_days)
+        await add_premium_user(user_id, expiry)
+
+        # Referral bonus check
+        referrer_id = await get_user_referrer(user_id)
+        if referrer_id and PREMIUM_REWARD_DAYS:
+            reward_expiry = datetime.utcnow() + timedelta(days=PREMIUM_REWARD_DAYS)
+            await add_premium_user(referrer_id, reward_expiry)
+
+        await message.reply(f"✅ Payment verified successfully!
+🎉 You have been granted premium access for {plan_days} days.")
+    else:
+        await message.reply(f"⚠️ Couldn't find a valid plan in your screenshot.
+Please send the payment screenshot to @{OWNER_USERNAME.lstrip('@')} for manual verification.")
+
+    # Cleanup
+    if os.path.exists(file_path):
+        os.remove(file_path)
