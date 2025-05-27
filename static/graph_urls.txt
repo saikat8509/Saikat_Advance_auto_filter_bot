@@ -1,1 +1,28 @@
-graph_urls.txt
+# Welcome & Goodbye
+WELCOME_IMAGE_URL=https://graph.org/file/abc123welcome.jpg
+GOODBYE_IMAGE_URL=https://graph.org/file/xyz789goodbye.jpg
+
+# Time-based Wishes
+MORNING_IMAGE_URL=https://graph.org/file/morning123.jpg
+AFTERNOON_IMAGE_URL=https://graph.org/file/afternoon456.jpg
+EVENING_IMAGE_URL=https://graph.org/file/evening789.jpg
+NIGHT_IMAGE_URL=https://graph.org/file/night101.jpg
+
+# /start & About Section
+START_IMAGES=(
+    https://graph.org/file/start1.jpg
+    https://graph.org/file/start2.jpg
+    https://graph.org/file/start3.jpg
+)
+ABOUT_IMAGE_URL=https://graph.org/file/about999.jpg
+
+# Premium & Referral
+PREMIUM_IMAGE_URL=https://graph.org/file/premium456.jpg
+REFERRAL_IMAGE_URL=https://graph.org/file/referral333.jpg
+
+# Help Menu
+HELP_IMAGE_URL=https://graph.org/file/help888.jpg
+
+# Trending/Popular Section
+TRENDING_IMAGE_URL=https://graph.org/file/trending777.jpg
+POPULAR_IMAGE_URL=https://graph.org/file/popular666.jpg
