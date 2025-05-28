@@ -8,7 +8,7 @@ API_HASH = os.getenv("API_HASH", "ac9926d2cb8acc38413f5e93881fd514")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7836574966:AAG3Rz4Xmy-h_W8F2VF3UEHi5raVnWXevY0")
 
 # === MongoDB ===
-MONGO_DB_URI = os.getenv("MONGO_DB_URI", "")
+MONGO_DB_URI = os.getenv("MONGO_DB_URI", "mongodb+srv://mailmetosaikat676:saikat9735@cluster0.2esif.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0 mongodb+srv://creazybanda84:sampa9735@cluster0.v4nwi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0 mongodb+srv://workwithsaikat:saikat9735@cluster0.0e5vp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 
 # === Bot Basic Config ===
 BOT_USERNAME = os.getenv("BOT_USERNAME", "Princess_Surch_Bot")
@@ -56,19 +56,19 @@ PREMIUM_PLANS = {
 WISHES = {
     "morning": {
         "text": os.getenv("GOOD_MORNING_TEXT", "Good Morning! ☀️"),
-        "image": os.getenv("GOOD_MORNING_IMAGE", "")
+        "image": os.getenv("GOOD_MORNING_IMAGE", "https://graph.org/file/239f0d8c61da76d3e33a4-35fa7c588489ec675b.jpg")
     },
     "afternoon": {
         "text": os.getenv("GOOD_AFTERNOON_TEXT", "Good Afternoon! 🌤️"),
-        "image": os.getenv("GOOD_AFTERNOON_IMAGE", "")
+        "image": os.getenv("GOOD_AFTERNOON_IMAGE", "https://graph.org/file/7e0ef6ba06f38f463ad13-d77f9ce4b838171c95.jpg")
     },
     "evening": {
         "text": os.getenv("GOOD_EVENING_TEXT", "Good Evening! 🌇"),
-        "image": os.getenv("GOOD_EVENING_IMAGE", "")
+        "image": os.getenv("GOOD_EVENING_IMAGE", "https://graph.org/file/c97b6bdff438cc626761c-6a7aec1bf2a41fe3c9.jpg")
     },
     "night": {
         "text": os.getenv("GOOD_NIGHT_TEXT", "Good Night! 🌙"),
-        "image": os.getenv("GOOD_NIGHT_IMAGE", "")
+        "image": os.getenv("GOOD_NIGHT_IMAGE", "https://graph.org/file/10030b1c0e17097e53758-35355c1185104c8217.jpg")
     }
 }
 
@@ -101,8 +101,8 @@ ADMIN_QR_IMAGE_URL = os.getenv("ADMIN_QR_IMAGE_URL", "https://graph.org/file/42e
 
 # === Rotating Start Images ===
 START_IMAGES = os.getenv("START_IMAGES", """
-https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg,
-https://graph.org/file/6b0c4cb1c0d90aadf7a4b-89e2cfdafea4b6acff.jpg,
-https://graph.org/file/42ebe0594c3356a5a0428-6e4437cdf281c5d517.jpg
+https://graph.org/file/801034beee0bc9024e364-43f7d2f29bba359564.jpg,
+https://graph.org/file/1e999a80d917ff157d848-c90ea0fda9b6650053.jpg,
+https://graph.org/file/1ed6d39fca02e42826bbd-4a9cb52ea057b3ff6d.jpg
 """).strip().split(",")
 
