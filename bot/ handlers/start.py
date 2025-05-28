@@ -1,39 +1,76 @@
-from pyrogram import filters, Client
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from config import START_IMAGES, BOT_NAME, OWNER_USERNAME, UPDATE_CHANNEL_URL, MOVIE_GROUP_URL, SUPPORT_GROUP_URL, ABOUT_IMAGE_URL
-from bot.utils.buttons import get_start_buttons
-from bot.utils.database import get_user, save_user
-import random
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from config import (
+    BOT_USERNAME,
+    OWNER_USERNAME,
+    PAYMENT_PROOF_CHANNEL_URL,
+    TUTORIAL_CHANNEL_URL,
+    UPDATE_CHANNEL_URL,
+    MOVIE_GROUP_URL,
+    SUPPORT_GROUP_URL,
+    PREMIUM_HEADER,
+    PREMIUM_FEATURES,
+    PREMIUM_FOOTER,
+)
 
-# Track rotating image index
-image_index = {}
+# Start buttons
+def get_start_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⚒️ ADD ME TO YOUR GROUP ⚒️", url=f"https://t.me/{BOT_USERNAME}?startgroup=true")],
+        [InlineKeyboardButton("JOIN UPDATE CHANNEL", url=UPDATE_CHANNEL_URL)],
+        [InlineKeyboardButton("MOVIE GROUP", url=MOVIE_GROUP_URL)],
+        [InlineKeyboardButton("SUPPORT GROUP", url=SUPPORT_GROUP_URL)],
+        [
+            InlineKeyboardButton("ABOUT", callback_data="about"),
+            InlineKeyboardButton("PREMIUM MEMBERSHIP & REFERRAL", callback_data="premium_referral"),
+            InlineKeyboardButton("⚒️Help Menu", callback_data="help_menu")
+        ],
+    ])
 
+# About buttons
+def get_about_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("OWNER", url=f"https://t.me/{OWNER_USERNAME.lstrip('@')}")],
+        [InlineKeyboardButton("SUPPORT GROUP", url=SUPPORT_GROUP_URL)],
+        [InlineKeyboardButton("MOVIE GROUP", url=MOVIE_GROUP_URL)],
+        [InlineKeyboardButton("BACK", callback_data="start")]
+    ])
 
-@Client.on_message(filters.private & filters.command("start"))
-async def start_handler(client: Client, message: Message):
-    user_id = message.from_user.id
-    first_name = message.from_user.first_name
+# Premium & Referral main buttons
+def get_premium_referral_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("PREMIUM PLANS", callback_data="premium_plans")],
+        [InlineKeyboardButton("REFERRAL", callback_data="referral")],
+        [InlineKeyboardButton("TAKE TRIAL", callback_data="take_trial")],
+        [InlineKeyboardButton("BACK", callback_data="start")]
+    ])
 
-    # Save user to DB if not exists
-    await save_user(user_id, first_name)
+# Premium plans buttons including Payment Proof channel button
+def get_premium_plans_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("SEND PAYMENT SCREENSHOT", url=f"https://t.me/{OWNER_USERNAME.lstrip('@')}")],
+        [InlineKeyboardButton("PROOF CHANNEL", url=PAYMENT_PROOF_CHANNEL_URL)],  # <-- Added here
+        [InlineKeyboardButton("BACK", callback_data="premium_referral")],
+        [InlineKeyboardButton("HOME", callback_data="start")]
+    ])
 
-    # Handle rotating image
-    index = image_index.get(user_id, 0)
-    image_url = START_IMAGES[index % len(START_IMAGES)]
-    image_index[user_id] = index + 1
+# Referral buttons
+def get_referral_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Invite Link", callback_data="invite_link")],
+        [InlineKeyboardButton("⌛️ Referral Count", callback_data="referral_count")],
+        [InlineKeyboardButton("BACK", callback_data="premium_referral")]
+    ])
 
-    caption = f"""👋 **Hello {first_name}!**
-Welcome to **{BOT_NAME}** 🎬
+# Non-premium download buttons with tutorial link
+def get_non_premium_download_buttons(shortened_link):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Download Now", url=shortened_link)],
+        [InlineKeyboardButton("How To Download", url=TUTORIAL_CHANNEL_URL)],
+    ])
 
-I can help you search and download movies with lightning speed 🚀
-
-Choose an option below to get started:
-"""
-
-    buttons = get_start_buttons()
-
-    await message.reply_photo(
-        photo=image_url,
-        caption=caption,
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+# Help menu buttons (example list of admin commands)
+def get_help_menu_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Admin Commands", callback_data="admin_commands")],
+        [InlineKeyboardButton("BACK", callback_data="start")]
+    ])
