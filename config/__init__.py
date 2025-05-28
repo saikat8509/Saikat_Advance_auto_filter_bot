@@ -27,7 +27,7 @@ FORCE_SUB_CHANNELS = os.getenv("FORCE_SUB_CHANNELS", "@creazy_trending_movie_cha
 AUTO_APPROVE_FSUB = os.getenv("AUTO_APPROVE_FSUB", "True").lower() == "true"
 
 # === Database Channel IDs for Indexing ===
-DATABASE_CHANNEL_IDS = list(map(int, os.getenv("DATABASE_CHANNEL_IDS", " -1002308876940 -1002509542265  -1002649284010 -1002287841044").split()))
+DATABASE_CHANNEL_IDS = list(map(int, os.getenv("DATABASE_CHANNEL_IDS", "-1002308876940 -1002509542265  -1002649284010 -1002287841044").split()))
 
 # === Welcome & Goodbye Images ===
 WELCOME_IMAGE_URL = os.getenv("WELCOME_IMAGE_URL", "https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg")
