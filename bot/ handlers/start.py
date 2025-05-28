@@ -1,62 +1,8 @@
 from pyrogram import Client, filters
-from pyrogram.types import (
-    Message,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-)
-import asyncio
-
-# List of rotating graph.org image URLs for /start command
-START_IMAGES = [
-    "https://graph.org/file/abc123startimage1.png",
-    "https://graph.org/file/abc123startimage2.png",
-    "https://graph.org/file/abc123startimage3.png",
-    "https://graph.org/file/abc123startimage4.png",
-    "https://graph.org/file/abc123startimage5.png",
-    "https://graph.org/file/abc123startimage6.png",
-]
-
-# This dict keeps track of user_id to last shown image index (can be persisted in DB)
-user_start_index = {}
-
-OWNER_ID = 123456789  # Replace with your actual admin Telegram ID
-UPDATE_CHANNEL = "https://t.me/creazy_announcement_hub"
-MOVIE_GROUP = "https://t.me/Creazy_Movie_Surch_Group"
-SUPPORT_GROUP = "https://t.me/Leazy_support_group"
-BOT_USERNAME = "Princess_Surch_Bot"  # your bot's username
-
-
-def get_start_image(user_id: int):
-    # Cycle through START_IMAGES based on user_id for variety, or use persistent DB for actual tracking
-    idx = user_start_index.get(user_id, 0)
-    image_url = START_IMAGES[idx]
-    # Update index for next time
-    user_start_index[user_id] = (idx + 1) % len(START_IMAGES)
-    return image_url
-
-
-def start_main_buttons():
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("⚒️ ADD ME TO YOUR GROUP ⚒️", url=f"https://t.me/{BOT_USERNAME}?startgroup=true"),
-            ],
-            [
-                InlineKeyboardButton("JOIN UPDATE CHANNEL", url=UPDATE_CHANNEL),
-                InlineKeyboardButton("MOVIE GROUP", url=MOVIE_GROUP),
-            ],
-            [
-                InlineKeyboardButton("SUPPORT GROUP", url=SUPPORT_GROUP),
-            ],
-            [
-                InlineKeyboardButton("ABOUT", callback_data="about_cb"),
-                InlineKeyboardButton("PREMIUM MEMBERSHIP & REFERRAL", callback_data="premium_referral_cb"),
-            ],
-            [
-                InlineKeyboardButton("⚒️ Help Menu", callback_data="help_menu_cb"),
-            ],
-        ]
-    )
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from config import OWNER_ID, SUPPORT_GROUP, MOVIE_GROUP, BOT_USERNAME
+from bot.utils.buttons import start_main_buttons
+from bot.utils.tools import get_start_image
 
 
 # /start command handler
@@ -202,10 +148,8 @@ Send payment screenshot to @Leazy_Boy for activation.
 @Client.on_callback_query(filters.regex("^referral_cb$"))
 async def referral_callback(client: Client, callback_query):
     user_id = callback_query.from_user.id
-    # Generate referral link (example)
     referral_link = f"https://t.me/{BOT_USERNAME}?start={user_id}"
-    # TODO: Fetch user's referral count from DB (mock 0 here)
-    referral_count = 0
+    referral_count = 0  # Placeholder
 
     referral_text = f"""
 **Referral Program**
@@ -215,14 +159,14 @@ Invite friends and earn points!
 Your referral link:
 `{referral_link}`
 
-Total referrals: ⌛️ {referral_count}
+Total referrals: ⌛ {referral_count}
 """
 
     referral_buttons = InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton("COPY LINK", url=referral_link),
-                InlineKeyboardButton("⌛️ Referrals", callback_data="referral_count_cb"),
+                InlineKeyboardButton("⌛ Referrals", callback_data="referral_count_cb"),
             ],
             [
                 InlineKeyboardButton("BACK", callback_data="premium_referral_cb"),
@@ -310,10 +254,10 @@ Use the buttons below to explore features, join our groups, or upgrade your expe
 
 Feel free to ask for help anytime via the Help Menu.
 """
-    await callback_query.message.edit_photo(
-        photo=start_image_url,
-        caption=welcome_text,
+    await callback_query.message.edit_media(
+        media=start_image_url,
         reply_markup=start_main_buttons(),
-        parse_mode="md",
+        caption=welcome_text,
+        parse_mode="md"
     )
     await callback_query.answer()
