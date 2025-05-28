@@ -1,149 +1,69 @@
-# bot/utils/database.py
+from motor.motor_asyncio import AsyncIOMotorClient
+from config import MONGO_DB_URI, LOG_CHANNEL
+import asyncio
 
-import motor.motor_asyncio
-from datetime import datetime, timedelta
-from config import MONGO_URL, DATABASE_NAME
+class Database:
+    def __init__(self):
+        self.client = AsyncIOMotorClient(MONGO_DB_URI)
+        self.db = self.client['autofilter_bot_db']
+        self.users = self.db['users']
+        self.files = self.db['files']
+        self.referrals = self.db['referrals']
+        self.premium = self.db['premium']
+        self.logs = self.db['logs']
 
-client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URL)
-db = client[DATABASE_NAME]
-
-# === USERS ===
-
-async def add_user(user_id, name):
-    await db.users.update_one(
-        {"_id": user_id},
-        {"$set": {"name": name, "joined_at": datetime.utcnow()}},
-        upsert=True,
-    )
-
-async def is_user_exist(user_id):
-    user = await db.users.find_one({"_id": user_id})
-    return bool(user)
-
-async def get_all_users():
-    return db.users.find()
-
-# === PREMIUM ===
-
-async def add_premium_user(user_id, plan_name, duration_days):
-    expiry = datetime.utcnow() + timedelta(days=duration_days)
-    await db.premium.update_one(
-        {"_id": user_id},
-        {"$set": {"plan": plan_name, "expires_at": expiry}},
-        upsert=True,
-    )
-
-async def remove_premium_user(user_id):
-    await db.premium.delete_one({"_id": user_id})
-
-async def is_premium(user_id):
-    user = await db.premium.find_one({"_id": user_id})
-    if not user:
+    # User management
+    async def add_user(self, user_id: int, username: str = None):
+        user = await self.users.find_one({"user_id": user_id})
+        if not user:
+            await self.users.insert_one({"user_id": user_id, "username": username, "joined_at": asyncio.get_event_loop().time()})
+            return True
         return False
-    if user.get("expires_at") < datetime.utcnow():
-        await remove_premium_user(user_id)
+
+    async def is_premium(self, user_id: int) -> bool:
+        premium_user = await self.premium.find_one({"user_id": user_id})
+        if premium_user:
+            from datetime import datetime
+            expire_ts = premium_user.get("expires_at")
+            if expire_ts and expire_ts > datetime.utcnow().timestamp():
+                return True
+            else:
+                # Expired premium - remove
+                await self.premium.delete_one({"user_id": user_id})
         return False
-    return True
 
-async def get_premium_users():
-    return db.premium.find()
+    async def add_premium(self, user_id: int, duration_days: int):
+        from datetime import datetime, timedelta
+        expire_time = datetime.utcnow() + timedelta(days=duration_days)
+        await self.premium.update_one(
+            {"user_id": user_id},
+            {"$set": {"expires_at": expire_time.timestamp()}},
+            upsert=True
+        )
 
-# === REFERRALS ===
+    # Referral system
+    async def add_referral(self, referrer_id: int, referred_id: int):
+        ref = await self.referrals.find_one({"referrer_id": referrer_id, "referred_id": referred_id})
+        if not ref:
+            await self.referrals.insert_one({"referrer_id": referrer_id, "referred_id": referred_id, "timestamp": asyncio.get_event_loop().time()})
+            return True
+        return False
 
-async def create_referral(user_id):
-    await db.referrals.update_one(
-        {"_id": user_id}, {"$setOnInsert": {"count": 0}}, upsert=True
-    )
+    async def count_referrals(self, referrer_id: int) -> int:
+        count = await self.referrals.count_documents({"referrer_id": referrer_id})
+        return count
 
-async def increase_referral(user_id):
-    await db.referrals.update_one({"_id": user_id}, {"$inc": {"count": 1}})
+    # File tracking (e.g. downloads, searches)
+    async def increment_file_download(self, file_id: str):
+        await self.files.update_one({"file_id": file_id}, {"$inc": {"downloads": 1}}, upsert=True)
 
-async def get_referral_count(user_id):
-    user = await db.referrals.find_one({"_id": user_id})
-    return user["count"] if user else 0
+    async def increment_file_search(self, file_id: str):
+        await self.files.update_one({"file_id": file_id}, {"$inc": {"searches": 1}}, upsert=True)
 
-# === URL SHORTENER TOKENS ===
+    # Log events to a channel or DB
+    async def log_event(self, event_type: str, data: dict):
+        log_entry = {"type": event_type, "data": data, "timestamp": asyncio.get_event_loop().time()}
+        await self.logs.insert_one(log_entry)
+        # You may add code here to forward log to LOG_CHANNEL if desired.
 
-async def save_user_token(user_id, token):
-    await db.tokens.update_one({"_id": user_id}, {"$set": {"token": token}}, upsert=True)
-
-async def get_user_token(user_id):
-    data = await db.tokens.find_one({"_id": user_id})
-    return data.get("token") if data else None
-
-# === FILE INDEXING ===
-
-async def add_file(file_id, file_name, file_caption, file_type, size, unique_id):
-    await db.files.update_one(
-        {"_id": unique_id},
-        {
-            "$set": {
-                "file_id": file_id,
-                "file_name": file_name,
-                "caption": file_caption,
-                "type": file_type,
-                "size": size,
-                "added_at": datetime.utcnow(),
-            }
-        },
-        upsert=True,
-    )
-
-async def search_files(query):
-    return db.files.find({"file_name": {"$regex": query, "$options": "i"}})
-
-async def get_file(unique_id):
-    return await db.files.find_one({"_id": unique_id})
-
-# === TRENDING / POPULAR ===
-
-async def increment_trending(query):
-    await db.trending.update_one(
-        {"query": query},
-        {"$inc": {"count": 1}, "$set": {"last_used": datetime.utcnow()}},
-        upsert=True,
-    )
-
-async def get_trending(limit=10):
-    return db.trending.find().sort("count", -1).limit(limit)
-
-async def increment_popular(file_id):
-    await db.popular.update_one(
-        {"file_id": file_id},
-        {"$inc": {"downloads": 1}, "$set": {"last_download": datetime.utcnow()}},
-        upsert=True,
-    )
-
-async def get_popular(limit=10):
-    return db.popular.find().sort("downloads", -1).limit(limit)
-
-# === FORCE SUBSCRIBE ===
-
-async def set_required_channels(channels):
-    await db.settings.update_one({"_id": "fsub"}, {"$set": {"channels": channels}}, upsert=True)
-
-async def get_required_channels():
-    data = await db.settings.find_one({"_id": "fsub"})
-    return data.get("channels", []) if data else []
-
-# === PLAN EXPIRY AUTO CHECK ===
-
-async def clean_expired_premium():
-    expired = await db.premium.delete_many({"expires_at": {"$lt": datetime.utcnow()}})
-    return expired.deleted_count
-
-# === STATS ===
-
-async def get_stats():
-    users = await db.users.count_documents({})
-    premium = await db.premium.count_documents({})
-    files = await db.files.count_documents({})
-    trending = await db.trending.count_documents({})
-    popular = await db.popular.count_documents({})
-    return {
-        "users": users,
-        "premium": premium,
-        "files": files,
-        "trending": trending,
-        "popular": popular,
-    }
+db = Database()
