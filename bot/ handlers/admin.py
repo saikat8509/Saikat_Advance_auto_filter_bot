@@ -1,78 +1,68 @@
-# bot/handlers/admin.py
-
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from config import ADMINS, TUTORIAL_URL_DB
-from database.premium_db import add_premium_user, remove_premium_user
-from utils.database import get_user_plan, set_tutorial_url, remove_tutorial_url
-import os
-
-# ✅ ADMIN CHECK
-def admin_only(func):
-    async def wrapper(client, message: Message):
-        if message.from_user.id not in ADMINS:
-            return await message.reply("🚫 You are not authorized to use this command.")
-        return await func(client, message)
-    return wrapper
+from config import ADMINS, PREMIUM_PLANS
+from bot.utils.database import (
+    add_premium_user,
+    remove_premium_user,
+    get_user_plan,
+    set_user_plan,
+    get_all_users,
+)
+from datetime import datetime, timedelta
+from bot.utils.broadcast import broadcast_message
 
 
-# ✅ /add_premium user_id days
-@Client.on_message(filters.command("add_premium") & filters.private)
-@admin_only
-async def add_premium_handler(client, message: Message):
+@Client.on_message(filters.command("addpremium") & filters.user(ADMINS))
+async def add_premium_cmd(_, message: Message):
+    if len(message.command) < 3:
+        return await message.reply("Usage: /addpremium <user_id> <plan_days>")
     try:
-        _, user_id, days = message.text.split()
-        await add_premium_user(int(user_id), int(days))
-        await message.reply(f"✅ User {user_id} added to premium for {days} days.")
+        user_id = int(message.command[1])
+        plan_days = int(message.command[2])
+        expiry_date = datetime.utcnow() + timedelta(days=plan_days)
+        await set_user_plan(user_id, True, expiry_date)
+        await message.reply(f"✅ Premium granted to `{user_id}` for {plan_days} days.")
     except Exception as e:
-        await message.reply(f"❌ Usage: /add_premium user_id days\n\nError: {e}")
+        await message.reply(f"❌ Error: {e}")
 
-# ✅ /remove_premium user_id
-@Client.on_message(filters.command("remove_premium") & filters.private)
-@admin_only
-async def remove_premium_handler(client, message: Message):
+
+@Client.on_message(filters.command("removepremium") & filters.user(ADMINS))
+async def remove_premium_cmd(_, message: Message):
+    if len(message.command) < 2:
+        return await message.reply("Usage: /removepremium <user_id>")
     try:
-        _, user_id = message.text.split()
-        await remove_premium_user(int(user_id))
-        await message.reply(f"✅ Removed user {user_id} from premium.")
+        user_id = int(message.command[1])
+        await set_user_plan(user_id, False, None)
+        await message.reply(f"🗑️ Premium removed for `{user_id}`.")
     except Exception as e:
-        await message.reply(f"❌ Usage: /remove_premium user_id\n\nError: {e}")
+        await message.reply(f"❌ Error: {e}")
 
-# ✅ /id - get user & chat ID
-@Client.on_message(filters.command("id"))
-async def id_handler(client, message: Message):
-    reply = message.reply_to_message
-    user = reply.from_user if reply else message.from_user
-    await message.reply(f"👤 User ID: `{user.id}`\n💬 Chat ID: `{message.chat.id}`")
 
-# ✅ /restart
-@Client.on_message(filters.command("restart") & filters.private)
-@admin_only
-async def restart_handler(client, message: Message):
-    await message.reply("♻️ Bot is restarting...")
-    os.execl(sys.executable, sys.executable, *sys.argv)
+@Client.on_message(filters.command("myplan"))
+async def myplan_cmd(_, message: Message):
+    user_id = message.from_user.id
+    plan = await get_user_plan(user_id)
+    if plan and plan["is_premium"]:
+        expires = plan["expires_at"]
+        expires_str = expires.strftime("%Y-%m-%d %H:%M:%S") if expires else "Unknown"
+        await message.reply(f"💎 You are a premium user!\n🕒 Expires on: `{expires_str}`")
+    else:
+        await message.reply("⚠️ You are not a premium user.\nBuy one using the PREMIUM MEMBERSHIP button.")
 
-# ✅ /set_tutorial <url>
-@Client.on_message(filters.command("set_tutorial") & filters.private)
-@admin_only
-async def set_tutorial(client, message: Message):
-    try:
-        url = message.text.split(maxsplit=1)[1]
-        await set_tutorial_url(url)
-        await message.reply("✅ Tutorial URL set successfully.")
-    except IndexError:
-        await message.reply("❌ Usage: /set_tutorial <url>")
 
-# ✅ /remove_tutorial
-@Client.on_message(filters.command("remove_tutorial") & filters.private)
-@admin_only
-async def remove_tutorial(client, message: Message):
-    await remove_tutorial_url()
-    await message.reply("✅ Tutorial URL removed.")
+@Client.on_message(filters.command("users") & filters.user(ADMINS))
+async def total_users(_, message: Message):
+    users = await get_all_users()
+    await message.reply(f"👥 Total Users: `{len(users)}`")
 
-# ✅ /leave - Bot leaves the group (admin only)
-@Client.on_message(filters.command("leave") & filters.group)
-@admin_only
-async def leave_group(client, message: Message):
-    await message.reply("👋 Leaving this chat as requested by admin...")
-    await client.leave_chat(message.chat.id)
+
+@Client.on_message(filters.command("broadcast") & filters.user(ADMINS))
+async def broadcast_cmd(_, message: Message):
+    if not message.reply_to_message:
+        return await message.reply("Reply to a message to broadcast.")
+    
+    await message.reply("📣 Broadcasting...")
+    total, success, failed = await broadcast_message(message.reply_to_message)
+    await message.reply(
+        f"✅ Broadcast complete\n\nTotal: {total}\n✅ Success: {success}\n❌ Failed: {failed}"
+    )
