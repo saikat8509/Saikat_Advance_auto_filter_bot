@@ -1,14 +1,18 @@
 import os
 import json
 
-
 # === Telegram Bot Credentials ===
 API_ID = int(os.getenv("API_ID", "23584757"))
 API_HASH = os.getenv("API_HASH", "ac9926d2cb8acc38413f5e93881fd514")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
 # === MongoDB ===
-MONGO_DB_URI = os.getenv("MONGO_DB_URI", "mongodb+srv://mailmetosaikat676:saikat9735@cluster0.2esif.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0 mongodb+srv://creazybanda84:sampa9735@cluster0.v4nwi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0 mongodb+srv://workwithsaikat:saikat9735@cluster0.0e5vp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_DB_URIS = os.getenv(
+    "MONGO_DB_URI",
+    "mongodb+srv://mailmetosaikat676:saikat9735@cluster0.2esif.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0 "
+    "mongodb+srv://creazybanda84:sampa9735@cluster0.v4nwi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0 "
+    "mongodb+srv://workwithsaikat:saikat9735@cluster0.0e5vp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+).split()
 
 # === Bot Basic Config ===
 BOT_USERNAME = os.getenv("BOT_USERNAME", "Princess_Surch_Bot")
@@ -22,16 +26,15 @@ UPDATE_CHANNEL_URL = os.getenv("UPDATE_CHANNEL_URL", "https://t.me/creazy_announ
 MOVIE_GROUP_URL = os.getenv("MOVIE_GROUP_URL", "https://t.me/Creazy_Movie_Surch_Group")
 SUPPORT_GROUP_URL = os.getenv("SUPPORT_GROUP_URL", "https://t.me/Leazy_support_group")
 
-# === Log Channel for Errors, Joins, etc. ===
-LOG_CHANNEL = int(os.getenv("LOG_CHANNEL", "-1002187892688"))  # Change to your bot's log channel ID
-
+# === Log Channel ===
+LOG_CHANNEL = int(os.getenv("LOG_CHANNEL", "-1002187892688"))
 
 # === Force Subscribe ===
 FORCE_SUB_CHANNELS = os.getenv("FORCE_SUB_CHANNELS", "@creazy_trending_movie_channel @creazy_popular_movie_channel @ceazy_backup_X").split()
 AUTO_APPROVE_FSUB = os.getenv("AUTO_APPROVE_FSUB", "True").lower() == "true"
 
-# === Database Channel IDs for Indexing ===
-DATABASE_CHANNEL_IDS = list(map(int, os.getenv("DATABASE_CHANNEL_IDS", "-1002308876940 -1002509542265  -1002649284010 -1002287841044").split()))
+# === Database Channel IDs ===
+DATABASE_CHANNEL_IDS = list(map(int, os.getenv("DATABASE_CHANNEL_IDS", "-1002308876940 -1002509542265 -1002649284010 -1002287841044").split()))
 
 # === Welcome & Goodbye Images ===
 WELCOME_IMAGE_URL = os.getenv("WELCOME_IMAGE_URL", "https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg")
@@ -104,9 +107,8 @@ OCR_PROVIDER = os.getenv("OCR_PROVIDER", "tesseract")
 ADMIN_QR_IMAGE_URL = os.getenv("ADMIN_QR_IMAGE_URL", "https://graph.org/file/42ebe0594c3356a5a0428-6e4437cdf281c5d517.jpg")
 
 # === Rotating Start Images ===
-START_IMAGES = os.getenv("START_IMAGES", """
+START_IMAGES = [img.strip() for img in os.getenv("START_IMAGES", """
 https://graph.org/file/801034beee0bc9024e364-43f7d2f29bba359564.jpg,
 https://graph.org/file/1e999a80d917ff157d848-c90ea0fda9b6650053.jpg,
 https://graph.org/file/1ed6d39fca02e42826bbd-4a9cb52ea057b3ff6d.jpg
-""").strip().split(",")
-
+""").strip().split(",") if img.strip()]
