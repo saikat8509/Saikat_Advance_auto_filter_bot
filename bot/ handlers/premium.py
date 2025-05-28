@@ -1,59 +1,63 @@
 from pyrogram import filters, Client
-from pyrogram.types import Message, CallbackQuery
-from bot.utils.buttons import premium_menu_buttons, premium_plans_buttons, referral_buttons
-from config import PREMIUM_HEADER, PREMIUM_FOOTER, PREMIUM_FEATURES, PREMIUM_PLANS, TRIAL_DURATION_HOURS
-from bot.utils.database import get_user_plan, start_trial_for_user
-from datetime import datetime
+from pyrogram.types import Message
+from datetime import datetime, timedelta
+from bot.utils.database import add_premium_user, get_user_plan, remove_expired_premium_users
+from config import PREMIUM_PLANS, TRIAL_DURATION_HOURS
+from bot.utils.buttons import premium_main_buttons
 
-@Client.on_message(filters.command("myplan"))
-async def my_plan(client: Client, message: Message):
+
+@Client.on_message(filters.command("myplan") & filters.private)
+async def my_plan(client, message: Message):
     user_id = message.from_user.id
     plan = await get_user_plan(user_id)
+
     if plan:
-        expiry = datetime.utcfromtimestamp(plan['expires_at']).strftime('%Y-%m-%d %H:%M:%S UTC')
-        text = f"\u2705 **You have an active premium plan**\n**Plan:** {plan['label']}\n**Valid until:** `{expiry}`"
+        remaining = plan["expiry_date"] - datetime.utcnow()
+        text = f"✅ **You are a Premium User!**\n\n**Plan:** {plan['label']}\n**Expires In:** {remaining.days} days"
     else:
-        text = "\u274C You don't have any active premium plans."
-    await message.reply(text)
+        text = "❌ You are not a premium user.\n\nUse /premium to explore premium plans."
 
-@Client.on_callback_query(filters.regex("^premium$"))
-async def premium_menu(_, callback_query: CallbackQuery):
-    await callback_query.message.edit_text(
-        text=f"{PREMIUM_HEADER}\n\n{PREMIUM_FEATURES}\n\n{PREMIUM_FOOTER}",
-        reply_markup=premium_menu_buttons(),
-        disable_web_page_preview=True
+    await message.reply_text(
+        text,
+        reply_markup=premium_main_buttons(),
+        quote=True
     )
 
-@Client.on_callback_query(filters.regex("^plans$"))
-async def premium_plans(_, callback_query: CallbackQuery):
-    text = "\u2728 **Available Premium Plans**\n\n"
-    for days, info in PREMIUM_PLANS.items():
-        text += f"\u2022 **{info['label']}**  -  ₹{info['price']}  ({days} days)\n"
-    text += f"\n{PREMIUM_FOOTER}"
-    await callback_query.message.edit_text(
-        text=text,
-        reply_markup=premium_plans_buttons(),
-        disable_web_page_preview=True
-    )
 
-@Client.on_callback_query(filters.regex("^referral$"))
-async def referral_info(_, callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    invite_link = f"https://t.me/YourBotUsername?start={user_id}"  # Replace with dynamic username if needed
-    count = await get_user_referral_count(user_id)
-    text = f"\ud83d\udce3 **Invite Friends & Earn Premium**\n\nInvite your friends using your link below and earn premium days!\n\n**Your Link:** `{invite_link}`\n**Referrals:** {count}"
-    await callback_query.message.edit_text(
-        text=text,
-        reply_markup=referral_buttons(user_id, count),
-        disable_web_page_preview=True
-    )
+@Client.on_message(filters.command("addpremium") & filters.user([int]))  # Replace [int] with actual admin user_ids
+async def add_premium(client, message: Message):
+    if len(message.command) < 3:
+        return await message.reply("Usage: /addpremium <user_id> <days>")
 
-@Client.on_callback_query(filters.regex("^trial$"))
-async def take_trial(client: Client, callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    status = await start_trial_for_user(user_id, TRIAL_DURATION_HOURS)
-    if status == "already_taken":
-        text = "\u274C You've already taken a trial."
-    else:
-        text = f"\u2705 Trial started! You now have premium access for {TRIAL_DURATION_HOURS} hours."
-    await callback_query.answer(text, show_alert=True)
+    try:
+        user_id = int(message.command[1])
+        days = int(message.command[2])
+        plan = PREMIUM_PLANS.get(str(days))
+        if not plan:
+            return await message.reply("Invalid days. Choose from plan keys: " + ", ".join(PREMIUM_PLANS.keys()))
+
+        expiry_date = datetime.utcnow() + timedelta(days=days)
+        await add_premium_user(user_id, expiry_date, plan["label"])
+        await message.reply(f"✅ Added premium user {user_id} for {days} days.")
+    except Exception as e:
+        await message.reply(f"Error: {e}")
+
+
+@Client.on_message(filters.command("trial") & filters.private)
+async def trial_user(client, message: Message):
+    user_id = message.from_user.id
+    plan = await get_user_plan(user_id)
+
+    if plan:
+        await message.reply("❌ You already have a plan. Trials are for new users only.")
+        return
+
+    expiry_date = datetime.utcnow() + timedelta(hours=TRIAL_DURATION_HOURS)
+    await add_premium_user(user_id, expiry_date, label="🆓 Trial Plan")
+    await message.reply("✅ Trial activated successfully!\nEnjoy premium for a limited time.")
+
+
+@Client.on_message(filters.command("clearexpired") & filters.user([int]))  # Replace [int] with actual admin user_ids
+async def clear_expired(client, message: Message):
+    count = await remove_expired_premium_users()
+    await message.reply(f"✅ Cleared {count} expired premium users.")
