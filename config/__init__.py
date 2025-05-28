@@ -7,12 +7,11 @@ API_HASH = os.getenv("API_HASH", "ac9926d2cb8acc38413f5e93881fd514")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
 # === MongoDB ===
-MONGO_DB_URIS = os.getenv(
-    "MONGO_DB_URI",
+MONGO_DB_URI = os.getenv("MONGO_DB_URI", (
     "mongodb+srv://mailmetosaikat676:saikat9735@cluster0.2esif.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0 "
     "mongodb+srv://creazybanda84:sampa9735@cluster0.v4nwi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0 "
     "mongodb+srv://workwithsaikat:saikat9735@cluster0.0e5vp.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-).split()
+))
 
 # === Bot Basic Config ===
 BOT_USERNAME = os.getenv("BOT_USERNAME", "Princess_Surch_Bot")
@@ -33,22 +32,22 @@ LOG_CHANNEL = int(os.getenv("LOG_CHANNEL", "-1002187892688"))
 FORCE_SUB_CHANNELS = os.getenv("FORCE_SUB_CHANNELS", "@creazy_trending_movie_channel @creazy_popular_movie_channel @ceazy_backup_X").split()
 AUTO_APPROVE_FSUB = os.getenv("AUTO_APPROVE_FSUB", "True").lower() == "true"
 
-# === Database Channel IDs ===
+# === Database Channels ===
 DATABASE_CHANNEL_IDS = list(map(int, os.getenv("DATABASE_CHANNEL_IDS", "-1002308876940 -1002509542265 -1002649284010 -1002287841044").split()))
 
-# === Welcome & Goodbye Images ===
+# === Welcome & Goodbye ===
 WELCOME_IMAGE_URL = os.getenv("WELCOME_IMAGE_URL", "https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg")
 GOODBYE_IMAGE_URL = os.getenv("GOODBYE_IMAGE_URL", "https://graph.org/file/6b0c4cb1c0d90aadf7a4b-89e2cfdafea4b6acff.jpg")
 
-# === About Section Image ===
+# === About Image ===
 ABOUT_IMAGE_URL = os.getenv("ABOUT_IMAGE_URL", "https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg")
 
-# === Popular & Trending Channels ===
+# === Channels for Popular, Trending, Requests ===
 POPULAR_CHANNEL_ID = int(os.getenv("POPULAR_CHANNEL_ID", "-1002619662804"))
 TRENDING_CHANNEL_ID = int(os.getenv("TRENDING_CHANNEL_ID", "-1002619662804"))
 REQUEST_CHANNEL_ID = int(os.getenv("REQUEST_CHANNEL_ID", "-1002303567438"))
 
-# === Deployment ===
+# === Deployment Port ===
 PORT = int(os.getenv("PORT", "8080"))
 
 # === Premium Plans ===
@@ -59,7 +58,7 @@ PREMIUM_PLANS = {
     "180": {"days": 180, "price": 549, "label": "🏆 90 Days Plan"},
 }
 
-# === WISHES ===
+# === Wishes System ===
 WISHES = {
     "morning": {
         "text": os.getenv("GOOD_MORNING_TEXT", "Good Morning! ☀️"),
@@ -79,11 +78,11 @@ WISHES = {
     }
 }
 
-# === Premium System ===
+# === Premium System Settings ===
 TRIAL_DURATION_HOURS = int(os.getenv("TRIAL_DURATION_HOURS", "3"))
 REFERRAL_REWARD_DAYS = int(os.getenv("REFERRAL_REWARD_DAYS", "15"))
 
-# === Premium Display Content ===
+# === Premium Display ===
 PREMIUM_HEADER = os.getenv("PREMIUM_HEADER", "🔥 Unlock Premium Benefits Now!\n")
 PREMIUM_FEATURES = os.getenv("PREMIUM_FEATURES", """○ ɴᴏ ɴᴇᴇᴅ ᴛᴏ ᴠᴇʀɪꜰʏ
 ○ ɴᴏ ɴᴇᴇᴅ ᴛᴏ ᴏᴘᴇɴ ʟɪɴᴋꜱ
@@ -95,7 +94,7 @@ PREMIUM_FEATURES = os.getenv("PREMIUM_FEATURES", """○ ɴᴏ ɴᴇᴇᴅ ᴛᴏ
 ○ ʀᴇǫᴜᴇꜱᴛ ᴡɪʟʟ ʙᴇ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ɪɴ ɪɴꜱᴛᴀɴᴛʟʏ [verify instantly]""")
 PREMIUM_FOOTER = os.getenv("PREMIUM_FOOTER", f"🖼️ Upload your payment screenshot below (auto verification enabled)\n💬 Or DM {OWNER_USERNAME} if any issues\n📂 Proofs: {PAYMENT_PROOF_CHANNEL_URL}")
 
-# === Token Verification Shortener ===
+# === Token Verification ===
 ENABLE_TOKEN_VERIFICATION = os.getenv("ENABLE_TOKEN_VERIFICATION", "True").lower() == "true"
 SHORTENER_APIS = json.loads(os.getenv("SHORTENER_APIS_JSON", "{}"))
 
@@ -106,9 +105,9 @@ OCR_PROVIDER = os.getenv("OCR_PROVIDER", "tesseract")
 # === Admin QR Code Image ===
 ADMIN_QR_IMAGE_URL = os.getenv("ADMIN_QR_IMAGE_URL", "https://graph.org/file/42ebe0594c3356a5a0428-6e4437cdf281c5d517.jpg")
 
-# === Rotating Start Images ===
+# === Start Command Rotating Images ===
 START_IMAGES = [img.strip() for img in os.getenv("START_IMAGES", """
 https://graph.org/file/801034beee0bc9024e364-43f7d2f29bba359564.jpg,
 https://graph.org/file/1e999a80d917ff157d848-c90ea0fda9b6650053.jpg,
 https://graph.org/file/1ed6d39fca02e42826bbd-4a9cb52ea057b3ff6d.jpg
-""").strip().split(",") if img.strip()]
+""").split(",") if img.strip()]
