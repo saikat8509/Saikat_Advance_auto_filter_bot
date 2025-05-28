@@ -22,6 +22,10 @@ UPDATE_CHANNEL_URL = os.getenv("UPDATE_CHANNEL_URL", "https://t.me/creazy_announ
 MOVIE_GROUP_URL = os.getenv("MOVIE_GROUP_URL", "https://t.me/Creazy_Movie_Surch_Group")
 SUPPORT_GROUP_URL = os.getenv("SUPPORT_GROUP_URL", "https://t.me/Leazy_support_group")
 
+# === Log Channel for Errors, Joins, etc. ===
+LOG_CHANNEL = int(os.getenv("LOG_CHANNEL", "-1001234567890"))  # Change to your bot's log channel ID
+
+
 # === Force Subscribe ===
 FORCE_SUB_CHANNELS = os.getenv("FORCE_SUB_CHANNELS", "@creazy_trending_movie_channel @creazy_popular_movie_channel @ceazy_backup_X").split()
 AUTO_APPROVE_FSUB = os.getenv("AUTO_APPROVE_FSUB", "True").lower() == "true"
