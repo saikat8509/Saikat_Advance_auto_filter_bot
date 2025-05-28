@@ -23,7 +23,7 @@ MOVIE_GROUP_URL = os.getenv("MOVIE_GROUP_URL", "https://t.me/Creazy_Movie_Surch_
 SUPPORT_GROUP_URL = os.getenv("SUPPORT_GROUP_URL", "https://t.me/Leazy_support_group")
 
 # === Log Channel for Errors, Joins, etc. ===
-LOG_CHANNEL = int(os.getenv("LOG_CHANNEL", "-1001234567890"))  # Change to your bot's log channel ID
+LOG_CHANNEL = int(os.getenv("LOG_CHANNEL", "-1002187892688"))  # Change to your bot's log channel ID
 
 
 # === Force Subscribe ===
