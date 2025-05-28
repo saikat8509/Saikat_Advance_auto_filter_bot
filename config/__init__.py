@@ -3,9 +3,9 @@ import json
 
 
 # === Telegram Bot Credentials ===
-API_ID = int(os.getenv("API_ID", "123456"))
+API_ID = int(os.getenv("API_ID", "23584757"))
 API_HASH = os.getenv("API_HASH", "ac9926d2cb8acc38413f5e93881fd514")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7836574966:AAG3Rz4Xmy-h_W8F2VF3UEHi5raVnWXevY0")
 
 # === MongoDB ===
 MONGO_DB_URI = os.getenv("MONGO_DB_URI", "")
@@ -23,23 +23,23 @@ MOVIE_GROUP_URL = os.getenv("MOVIE_GROUP_URL", "https://t.me/Creazy_Movie_Surch_
 SUPPORT_GROUP_URL = os.getenv("SUPPORT_GROUP_URL", "https://t.me/Leazy_support_group")
 
 # === Force Subscribe ===
-FORCE_SUB_CHANNELS = os.getenv("FORCE_SUB_CHANNELS", "@channel1 @channel2").split()
+FORCE_SUB_CHANNELS = os.getenv("FORCE_SUB_CHANNELS", "@creazy_trending_movie_channel @creazy_popular_movie_channel @ceazy_backup_X").split()
 AUTO_APPROVE_FSUB = os.getenv("AUTO_APPROVE_FSUB", "True").lower() == "true"
 
 # === Database Channel IDs for Indexing ===
-DATABASE_CHANNEL_IDS = list(map(int, os.getenv("DATABASE_CHANNEL_IDS", "-1001234567890 -1009876543210").split()))
+DATABASE_CHANNEL_IDS = list(map(int, os.getenv("DATABASE_CHANNEL_IDS", " -1002308876940 -1002509542265  -1002649284010 -1002287841044").split()))
 
 # === Welcome & Goodbye Images ===
-WELCOME_IMAGE_URL = os.getenv("WELCOME_IMAGE_URL", "https://graph.org/file/xxx.jpg")
-GOODBYE_IMAGE_URL = os.getenv("GOODBYE_IMAGE_URL", "https://graph.org/file/yyy.jpg")
+WELCOME_IMAGE_URL = os.getenv("WELCOME_IMAGE_URL", "https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg")
+GOODBYE_IMAGE_URL = os.getenv("GOODBYE_IMAGE_URL", "https://graph.org/file/6b0c4cb1c0d90aadf7a4b-89e2cfdafea4b6acff.jpg")
 
 # === About Section Image ===
-ABOUT_IMAGE_URL = os.getenv("ABOUT_IMAGE_URL", "https://graph.org/file/zzz.jpg")
+ABOUT_IMAGE_URL = os.getenv("ABOUT_IMAGE_URL", "https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg")
 
 # === Popular & Trending Channels ===
-POPULAR_CHANNEL_ID = int(os.getenv("POPULAR_CHANNEL_ID", "-1001122334455"))
-TRENDING_CHANNEL_ID = int(os.getenv("TRENDING_CHANNEL_ID", "-1005544332211"))
-REQUEST_CHANNEL_ID = int(os.getenv("REQUEST_CHANNEL_ID", "-1009988776655"))
+POPULAR_CHANNEL_ID = int(os.getenv("POPULAR_CHANNEL_ID", "-1002619662804"))
+TRENDING_CHANNEL_ID = int(os.getenv("TRENDING_CHANNEL_ID", "-1002619662804"))
+REQUEST_CHANNEL_ID = int(os.getenv("REQUEST_CHANNEL_ID", "-1002303567438"))
 
 # === Deployment ===
 PORT = int(os.getenv("PORT", "8080"))
@@ -47,9 +47,9 @@ PORT = int(os.getenv("PORT", "8080"))
 # === Premium Plans ===
 PREMIUM_PLANS = {
     "7": {"days": 7, "price": 29, "label": "🥉 7 Days Plan"},
-    "15": {"days": 15, "price": 49, "label": "🥈 15 Days Plan"},
-    "30": {"days": 30, "price": 79, "label": "🥇 30 Days Plan"},
-    "90": {"days": 90, "price": 199, "label": "🏆 90 Days Plan"},
+    "30": {"days": 30, "price": 99, "label": "🥈 15 Days Plan"},
+    "90": {"days": 90, "price": 249, "label": "🥇 30 Days Plan"},
+    "180": {"days": 180, "price": 549, "label": "🏆 90 Days Plan"},
 }
 
 # === WISHES ===
@@ -74,7 +74,7 @@ WISHES = {
 
 # === Premium System ===
 TRIAL_DURATION_HOURS = int(os.getenv("TRIAL_DURATION_HOURS", "3"))
-REFERRAL_REWARD_DAYS = int(os.getenv("REFERRAL_REWARD_DAYS", "3"))
+REFERRAL_REWARD_DAYS = int(os.getenv("REFERRAL_REWARD_DAYS", "15"))
 
 # === Premium Display Content ===
 PREMIUM_HEADER = os.getenv("PREMIUM_HEADER", "🔥 Unlock Premium Benefits Now!\n")
@@ -93,8 +93,16 @@ ENABLE_TOKEN_VERIFICATION = os.getenv("ENABLE_TOKEN_VERIFICATION", "True").lower
 SHORTENER_APIS = json.loads(os.getenv("SHORTENER_APIS_JSON", "{}"))
 
 # === Screenshot AI Verification ===
-ENABLE_SCREENSHOT_AI = os.getenv("ENABLE_SCREENSHOT_AI", "False").lower() == "true"
+ENABLE_SCREENSHOT_AI = os.getenv("ENABLE_SCREENSHOT_AI", "True").lower() == "true"
 OCR_PROVIDER = os.getenv("OCR_PROVIDER", "tesseract")
 
 # === Admin QR Code Image ===
-ADMIN_QR_IMAGE_URL = os.getenv("ADMIN_QR_IMAGE_URL", "")
+ADMIN_QR_IMAGE_URL = os.getenv("ADMIN_QR_IMAGE_URL", "https://graph.org/file/42ebe0594c3356a5a0428-6e4437cdf281c5d517.jpg")
+
+# === Rotating Start Images ===
+START_IMAGES = os.getenv("START_IMAGES", """
+https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg,
+https://graph.org/file/6b0c4cb1c0d90aadf7a4b-89e2cfdafea4b6acff.jpg,
+https://graph.org/file/42ebe0594c3356a5a0428-6e4437cdf281c5d517.jpg
+""").strip().split(",")
+
