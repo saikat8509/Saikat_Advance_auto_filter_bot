@@ -49,5 +49,7 @@ OCR_PROVIDER=tesseract
 # Example: '{"shortzon":"API_KEY_HERE","try2link":"API_KEY_HERE"}'
 SHORTENER_APIS_JSON={"shortzon":"your_shortzon_api_key","try2link":"your_try2link_api_key"}
 
+LOG_CHANNEL=-100xxxxxxxxxx
+
 # Port for deployment (default 8080)
 PORT=8080
