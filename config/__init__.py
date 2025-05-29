@@ -50,12 +50,29 @@ REQUEST_CHANNEL_ID = os.getenv("REQUEST_CHANNEL_ID", "-1002303567438")
 # === Deployment Port ===
 PORT = os.getenv("PORT", "8080")
 
-# === Premium Plans ===
+
+# Premium plans dictionary: plan_id -> details
 PREMIUM_PLANS = {
-    "7": {"days": 7, "price": 29, "label": "🥉 7 Days Plan"},
-    "30": {"days": 30, "price": 99, "label": "🥈 15 Days Plan"},
-    "90": {"days": 90, "price": 249, "label": "🥇 30 Days Plan"},
-    "180": {"days": 180, "price": 549, "label": "🏆 90 Days Plan"},
+    "7": {
+        "days": 7,
+        "price": 50,
+        "label": "1 Week Plan"
+    },
+    "15": {
+        "days": 15,
+        "price": 100,
+        "label": "15 Days Plan"
+    },
+    "30": {
+        "days": 30,
+        "price": 150,
+        "label": "1 Month Plan"
+    },
+    "90": {
+        "days": 90,
+        "price": 400,
+        "label": "3 Months Plan"
+    }
 }
 
 # === Wishes System ===
@@ -78,9 +95,11 @@ WISHES = {
     }
 }
 
-# === Premium System Settings ===
-TRIAL_DURATION_HOURS = os.getenv("TRIAL_DURATION_HOURS", "3")
-REFERRAL_REWARD_DAYS = os.getenv("REFERRAL_REWARD_DAYS", "15")
+# Trial duration in days (default 3)
+TRIAL_DURATION_DAYS = int(os.getenv("TRIAL_DURATION_DAYS", "3"))
+
+# Referral reward days (default 7)
+REFERRAL_REWARD_DAYS = int(os.getenv("REFERRAL_REWARD_DAYS", "7"))
 
 # === Premium Display ===
 PREMIUM_HEADER = os.getenv("PREMIUM_HEADER", "🔥 Unlock Premium Benefits Now!\n")
