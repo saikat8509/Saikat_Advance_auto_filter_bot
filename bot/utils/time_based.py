@@ -1,58 +1,44 @@
-# bot/utils/time_based.py
-
-from datetime import datetime
+from datetime import datetime, time
 import pytz
+from bot.config import WISHES
 
-# Fallback timezone in case user timezone is unknown
-DEFAULT_TIMEZONE = "Asia/Kolkata"
-
-def get_current_time(timezone: str = DEFAULT_TIMEZONE) -> datetime:
+def get_time_of_day(hour: int) -> str:
     """
-    Returns the current datetime object based on a given timezone.
+    Determine the time of day category from an hour integer (0-23).
+    Returns one of: 'morning', 'afternoon', 'evening', 'night'.
     """
-    try:
-        tz = pytz.timezone(timezone)
-        return datetime.now(tz)
-    except Exception:
-        return datetime.now(pytz.timezone(DEFAULT_TIMEZONE))
-
-def get_time_period(timezone: str = DEFAULT_TIMEZONE) -> str:
-    """
-    Determines the time period (morning, afternoon, evening, night) based on user's timezone.
-    """
-    now = get_current_time(timezone).hour
-
-    if 5 <= now < 12:
+    if 5 <= hour < 12:
         return "morning"
-    elif 12 <= now < 17:
+    elif 12 <= hour < 17:
         return "afternoon"
-    elif 17 <= now < 21:
+    elif 17 <= hour < 21:
         return "evening"
     else:
         return "night"
 
-def get_wish_text(timezone: str = DEFAULT_TIMEZONE) -> tuple:
+def get_wish_for_timezone(timezone_str: str) -> dict:
     """
-    Returns appropriate wish text and associated static image URL for the time of day.
-    """
-    period = get_time_period(timezone)
+    Given a timezone string (e.g., 'Asia/Kolkata'), return a dict with:
+    - 'text': the wish text for current local time,
+    - 'image_url': the corresponding image URL for that time of day.
 
-    if period == "morning":
-        return "🌞 Good Morning! Have a great day ahead!", "https://graph.org/file/morning_image.jpg"
-    elif period == "afternoon":
-        return "☀️ Good Afternoon! Stay productive!", "https://graph.org/file/afternoon_image.jpg"
-    elif period == "evening":
-        return "🌇 Good Evening! Hope you had a nice day!", "https://graph.org/file/evening_image.jpg"
-    else:
-        return "🌙 Good Night! Sweet dreams!", "https://graph.org/file/night_image.jpg"
-
-def is_time_for_greeting(user_id: int, last_sent_time: datetime, timezone: str = DEFAULT_TIMEZONE) -> bool:
+    If timezone is invalid or not provided, defaults to UTC.
     """
-    Checks whether enough time has passed (e.g., 6 hours) since the last greeting to avoid spamming.
-    """
-    current_time = get_current_time(timezone)
-    if not last_sent_time:
-        return True
+    try:
+        tz = pytz.timezone(timezone_str)
+    except Exception:
+        tz = pytz.UTC
 
-    delta = current_time - last_sent_time
-    return delta.total_seconds() > 6 * 3600  # 6 hours
+    now = datetime.now(tz)
+    tod = get_time_of_day(now.hour)
+
+    # WISHES dictionary from config should have keys like 'morning', 'afternoon', etc.
+    wish_text = WISHES.get(tod, {}).get("text", "Hello!")
+    image_url = WISHES.get(tod, {}).get("image_url", "")
+
+    return {
+        "text": wish_text,
+        "image_url": image_url,
+        "time_of_day": tod,
+        "time": now.strftime("%H:%M")
+    }
