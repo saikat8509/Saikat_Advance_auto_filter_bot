@@ -1,84 +1,70 @@
-import motor.motor_asyncio
-from config import MONGO_DB_URI, DATABASE_CHANNEL_IDS
+from motor.motor_asyncio import AsyncIOMotorClient
+from config import MONGO_DB_URI
+from datetime import datetime, timedelta
 
-class Database:
-    def __init__(self):
-        self.client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_DB_URI)
-        self.db = self.client["autofilter_bot_db"]
+client = AsyncIOMotorClient(MONGO_DB_URI)
+db = client.autofilter_bot
 
-        # Collections
-        self.users = self.db["users"]
-        self.premium_users = self.db["premium_users"]
-        self.trial_users = self.db["trial_users"]
-        self.referrals = self.db["referrals"]
-        self.files = self.db["files"]  # Example collection for indexed files
+# === COLLECTIONS ===
+users_col = db.users
+searches_col = db.searches
+premium_col = db.premium
+referrals_col = db.referrals
 
-    # User management
-    async def add_user(self, user_id: int):
-        if not await self.users.find_one({"user_id": user_id}):
-            await self.users.insert_one({"user_id": user_id})
+# === USER FUNCTIONS ===
+async def add_user(user_id: int):
+    await users_col.update_one({"_id": user_id}, {"$setOnInsert": {"joined": datetime.utcnow()}}, upsert=True)
 
-    async def is_premium(self, user_id: int) -> bool:
-        doc = await self.premium_users.find_one({"user_id": user_id})
-        return bool(doc)
+async def total_users() -> int:
+    return await users_col.count_documents({})
 
-    async def add_premium_user(self, user_id: int, expires_at: int):
-        await self.premium_users.update_one(
-            {"user_id": user_id},
-            {"$set": {"expires_at": expires_at}},
-            upsert=True,
-        )
+# === PREMIUM FUNCTIONS ===
+async def is_premium_user(user_id: int) -> bool:
+    user = await premium_col.find_one({"_id": user_id})
+    if user and "expiry" in user:
+        return datetime.utcnow() < user["expiry"]
+    return False
 
-    async def remove_premium_user(self, user_id: int):
-        await self.premium_users.delete_one({"user_id": user_id})
+async def count_premium_users() -> int:
+    return await premium_col.count_documents({"expiry": {"$gt": datetime.utcnow()}})
 
-    async def add_trial_user(self, user_id: int, expires_at: int):
-        await self.trial_users.update_one(
-            {"user_id": user_id},
-            {"$set": {"expires_at": expires_at}},
-            upsert=True,
-        )
+async def count_trial_users() -> int:
+    return await premium_col.count_documents({"trial": True})
 
-    async def remove_trial_user(self, user_id: int):
-        await self.trial_users.delete_one({"user_id": user_id})
+async def add_premium_user(user_id: int, duration_days: int, is_trial=False):
+    expiry = datetime.utcnow() + timedelta(days=duration_days)
+    await premium_col.update_one(
+        {"_id": user_id},
+        {"$set": {"expiry": expiry, "trial": is_trial}},
+        upsert=True
+    )
 
-    # Referral management
-    async def add_referral(self, referrer_id: int, referred_id: int):
-        if not await self.referrals.find_one({"referred_id": referred_id}):
-            await self.referrals.insert_one({
-                "referrer_id": referrer_id,
-                "referred_id": referred_id,
-            })
+# === REFERRAL FUNCTIONS ===
+async def add_referral(referrer_id: int, referred_id: int):
+    await referrals_col.insert_one({
+        "referrer": referrer_id,
+        "referred": referred_id,
+        "timestamp": datetime.utcnow()
+    })
 
-    async def get_referral_count(self, referrer_id: int) -> int:
-        return await self.referrals.count_documents({"referrer_id": referrer_id})
+async def total_referred_users(referrer_id: int) -> int:
+    return await referrals_col.count_documents({"referrer": referrer_id})
 
-    # Statistics methods
+async def total_referral_count() -> int:
+    return await referrals_col.count_documents({})
 
-    async def total_users(self) -> int:
-        return await self.users.count_documents({})
+# === SPELLING / SIMILAR SEARCH ===
+async def get_similar_queries(query: str) -> list:
+    # Basic regex based search
+    cursor = searches_col.find({"query": {"$regex": query, "$options": "i"}}).limit(10)
+    results = []
+    async for doc in cursor:
+        results.append(doc["query"])
+    return results
 
-    async def count_premium_users(self) -> int:
-        return await self.premium_users.count_documents({})
-
-    async def count_trial_users(self) -> int:
-        return await self.trial_users.count_documents({})
-
-    async def total_referred_users(self) -> int:
-        return await self.referrals.count_documents({})
-
-    async def total_referral_count(self) -> int:
-        pipeline = [
-            {"$group": {"_id": None, "total": {"$sum": 1}}}
-        ]
-        result = await self.referrals.aggregate(pipeline).to_list(length=1)
-        if result:
-            return result[0].get("total", 0)
-        return 0
-
-    # Example: files count in indexed channels
-    async def count_files(self) -> int:
-        return await self.files.count_documents({"channel_id": {"$in": DATABASE_CHANNEL_IDS}})
-
-# Singleton instance of Database to be imported and used everywhere
-db = Database()
+async def log_search(user_id: int, query: str):
+    await searches_col.insert_one({
+        "user_id": user_id,
+        "query": query,
+        "timestamp": datetime.utcnow()
+    })
