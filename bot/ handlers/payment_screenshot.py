@@ -1,74 +1,78 @@
-from pyrogram import filters, Client
+import os
+import re
+import pytesseract
+from PIL import Image
+from io import BytesIO
+from datetime import datetime
+from pyrogram import Client, filters
 from pyrogram.types import Message
-from config import OWNER_ID, PREMIUM_PLANS, ENABLE_SCREENSHOT_AI
-from bot.utils.screenshot_ai import extract_payment_details
-from bot.utils.database import add_premium_user
-from datetime import datetime, timedelta
-import logging
 
-# Enable logging
-logger = logging.getLogger(__name__)
+from config import SCREENSHOT_AI_PROVIDER, PREMIUM_PLANS
+from bot.utils.premium import add_premium_user
+from bot.utils.database import get_user_referrer, increment_referral_points
+from config import ADMIN_ID
+
+# Optional: Configure Tesseract path if not in environment
+pytesseract.pytesseract.tesseract_cmd = os.getenv("TESSERACT_PATH", "/usr/bin/tesseract")
+
+# Regex to match amount like ₹49, ₹99 etc.
+AMOUNT_PATTERN = re.compile(r"(?:₹|INR)\s?(\d{2,4})")
 
 @Client.on_message(filters.private & filters.photo)
 async def handle_payment_screenshot(client: Client, message: Message):
-    if not ENABLE_SCREENSHOT_AI:
+    if message.caption and "/verify" not in message.caption.lower():
         return
 
     user_id = message.from_user.id
-    
+
     # Download the image
-    photo = await message.download()
-    
-    # Extract payment data using OCR
+    file = await message.download(in_memory=True)
+    img = Image.open(BytesIO(file.getvalue()))
+
+    # OCR to extract text
     try:
-        details = await extract_payment_details(photo)
+        text = pytesseract.image_to_string(img)
     except Exception as e:
-        logger.error(f"OCR failed: {e}")
-        await message.reply("❌ Failed to read the screenshot. Please try again or contact admin.")
+        await message.reply_text("❌ Failed to read screenshot. Try sending a clearer image.")
         return
 
-    amount = details.get("amount")
-    txn_id = details.get("txn_id")
-    timestamp = details.get("timestamp")
+    # Find payment amount
+    match = AMOUNT_PATTERN.search(text)
+    if not match:
+        await message.reply_text("❌ Couldn't detect a valid payment amount in your screenshot.")
+        return
 
-    # Check against available plans
-    matched = None
-    for plan in PREMIUM_PLANS:
-        if str(plan['price']) == str(amount):
-            matched = plan
+    amount = int(match.group(1))
+
+    # Match to a plan
+    selected_plan = None
+    for plan_id, plan in PREMIUM_PLANS.items():
+        if int(plan["price"]) == amount:
+            selected_plan = plan
             break
 
-    if matched:
-        days = matched['days']
-        expiry_date = datetime.utcnow() + timedelta(days=days)
-
-        # Grant premium access
-        await add_premium_user(user_id, expiry_date)
-        await message.reply(
-            f"✅ Payment of ₹{amount} verified!
-"
-            f"🎁 You've been granted **{days}-day Premium Access**.\n"
-            f"🗓️ Expires on: {expiry_date.strftime('%Y-%m-%d %H:%M:%S')} UTC"
-        )
-
-        # Optional: log to admin
+    if not selected_plan:
+        await message.reply_text("❌ No premium plan matched the detected payment amount. Please contact admin.")
         await client.send_message(
-            OWNER_ID,
-            f"💰 Payment verified for user `{user_id}`\n"
-            f"Amount: ₹{amount}\nTxn ID: {txn_id}\nTime: {timestamp}"
+            ADMIN_ID,
+            f"❗ Unmatched payment screenshot from [{message.from_user.first_name}](tg://user?id={user_id}).\nDetected amount: ₹{amount}"
         )
-    else:
-        await message.reply(
-            "⚠️ Couldn't auto-match this payment with any premium plan.\n"
-            "Please wait while an admin manually verifies your payment."
-        )
+        return
 
-        # Forward screenshot and extracted info to admin
-        await client.send_photo(
-            OWNER_ID,
-            photo=message.photo.file_id,
-            caption=(
-                f"⚠️ Manual verification needed for user `{user_id}`\n"
-                f"Extracted Data:\nAmount: ₹{amount}\nTxn ID: {txn_id}\nTime: {timestamp}"
-            )
-        )
+    # Add premium access
+    await add_premium_user(user_id, selected_plan["days"])
+
+    # Handle referral bonus
+    ref_by = await get_user_referrer(user_id)
+    if ref_by:
+        await increment_referral_points(ref_by)
+
+    await message.reply_text(
+        f"✅ Payment verified successfully!\n\n🎉 Premium access granted for {selected_plan['days']} days.\n\nEnjoy ad-free fast downloads!"
+    )
+
+    # Notify admin
+    await client.send_message(
+        ADMIN_ID,
+        f"✅ Verified payment screenshot from [{message.from_user.first_name}](tg://user?id={user_id}).\nPlan: {selected_plan['label']} (₹{amount})"
+    )
