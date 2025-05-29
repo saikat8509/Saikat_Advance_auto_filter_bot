@@ -1,53 +1,56 @@
 # bot/handlers/payment_screenshot.py
 
-from pyrogram import filters, Client
+from pyrogram import Client, filters
 from pyrogram.types import Message
-from config import ENABLE_SCREENSHOT_AI, OCR_PROVIDER, PREMIUM_PLANS
-from bot.utils.ocr import extract_payment_details
-from bot.utils.database import grant_premium
-from datetime import datetime, timedelta
-import re
+from config import ENABLE_SCREENSHOT_AI, OCR_PROVIDER, PREMIUM_PLANS, ADMIN
+from bot.utils.premium import grant_premium_access
+from bot.utils.ocr import extract_payment_data
+from bot.utils.database import save_payment_log
 
 @Client.on_message(filters.private & filters.photo)
-async def handle_payment_screenshot(client: Client, message: Message):
+async def handle_payment_screenshot(bot: Client, message: Message):
     if not ENABLE_SCREENSHOT_AI or OCR_PROVIDER.lower() != "tesseract":
-        # Feature is disabled in .env or unsupported OCR provider
+        return  # AI-based screenshot verification is disabled
+
+    user = message.from_user
+    photo = message.photo
+
+    # Download the screenshot locally
+    path = await bot.download_media(photo.file_id)
+    
+    # Extract data from the image using OCR
+    try:
+        payment_data = extract_payment_data(path)
+    except Exception as e:
+        await message.reply_text("❌ Failed to process screenshot. Please try again or contact support.")
         return
 
-    try:
-        # Download image
-        file_path = await message.download()
+    if not payment_data or not payment_data.get("amount"):
+        await message.reply_text("❌ Couldn't extract valid payment details. Please ensure the screenshot is clear.")
+        return
 
-        # Run OCR on image
-        ocr_result = extract_payment_details(file_path)
-        if not ocr_result:
-            await message.reply_text("❌ Failed to read payment details from the screenshot.")
-            return
+    amount = float(payment_data.get("amount", 0))
+    matched_plan = None
 
-        amount = ocr_result.get("amount")
-        txn_id = ocr_result.get("transaction_id")
-        payment_time = ocr_result.get("timestamp")
+    # Match extracted amount to any premium plan
+    for days, plan in PREMIUM_PLANS.items():
+        if float(plan["price"]) == amount:
+            matched_plan = int(days)
+            break
 
-        # Match amount to a plan
-        matched_plan = None
-        for days, details in PREMIUM_PLANS.items():
-            if int(details["price"]) == int(amount):
-                matched_plan = (int(days), details["label"])
-                break
-
-        if not matched_plan:
-            await message.reply_text("❌ Invalid payment amount. Please check our premium plans and try again.")
-            return
-
-        # Grant premium if valid
-        duration_days, label = matched_plan
-        expiry_date = datetime.utcnow() + timedelta(days=duration_days)
-        await grant_premium(user_id=message.from_user.id, expiry=expiry_date)
-
+    if matched_plan:
+        # Grant premium access and notify the user
+        await grant_premium_access(user.id, matched_plan)
         await message.reply_text(
-            f"✅ Payment of ₹{amount} detected!\n\n🎉 You've been granted **{label} Premium** access until `{expiry_date.strftime('%Y-%m-%d')}`.\n\nThank you!"
+            f"✅ Payment of ₹{amount} detected!\n"
+            f"You have been granted **{matched_plan} days** of premium access. Enjoy!"
+        )
+    else:
+        await message.reply_text(
+            f"⚠️ Payment of ₹{amount} was detected but doesn't match any known premium plan.\n"
+            f"Please contact the admin [here](https://t.me/{ADMIN}) with your screenshot.",
+            disable_web_page_preview=True
         )
 
-    except Exception as e:
-        await message.reply_text("⚠️ An error occurred while processing your screenshot.")
-        print(f"[Screenshot AI Error] {e}")
+    # Save payment log for reference
+    await save_payment_log(user.id, amount, payment_data)
