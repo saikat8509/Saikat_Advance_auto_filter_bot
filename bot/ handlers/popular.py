@@ -1,86 +1,58 @@
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from bot.database.popular import get_popular_files, get_trending_files, get_admin_picks
-from bot.utils.helper import generate_file_card
-from config import ADMINS
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from config import POPULAR_CHANNEL_ID
 
-# 📈 /trending command: Show trending movies by download frequency
-@Client.on_message(filters.command("trending") & filters.private)
-async def show_trending_movies(client, message):
-    files = await get_trending_files(limit=10)
-    if not files:
-        return await message.reply("⚠️ No trending movies found.")
+@Client.on_message(filters.command("popular"))
+async def popular_handler(client: Client, message: Message):
+    try:
+        popular_channel_id = POPULAR_CHANNEL_ID
+        if not popular_channel_id:
+            return await message.reply("❌ Popular channel not configured.")
 
-    text = "🔥 **Top Trending Movies (by downloads):**\n\n"
-    for idx, file in enumerate(files, start=1):
-        text += f"{idx}. `{file['file_name']}` — 📥 {file['download_count']} downloads\n"
-    await message.reply(text)
+        # Forward recent media from the popular channel (latest 10 messages with media)
+        messages = []
+        async for msg in client.get_chat_history(popular_channel_id, limit=20):
+            if msg.media:
+                messages.append(msg)
+            if len(messages) >= 10:
+                break
 
-# ⭐ /popular command: Show most viewed/popular files
-@Client.on_message(filters.command("popular") & filters.private)
-async def show_popular_movies(client, message):
-    files = await get_popular_files(limit=10)
-    if not files:
-        return await message.reply("⚠️ No popular movies found.")
+        if not messages:
+            return await message.reply("⚠️ No popular files found in the channel.")
 
-    text = "⭐ **Most Popular Files (by views):**\n\n"
-    for idx, file in enumerate(files, start=1):
-        text += f"{idx}. `{file['file_name']}` — 👁️ {file['views']} views\n"
-    await message.reply(text)
+        await message.reply_text(
+            "📊 **Popular Files:**",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔁 Refresh", callback_data="refresh_popular")]]
+            )
+        )
 
-# 👑 /adminpicks command: Show admin-featured movies
-@Client.on_message(filters.command("adminpicks") & filters.private)
-async def show_admin_picks(client, message):
-    files = await get_admin_picks(limit=10)
-    if not files:
-        return await message.reply("⚠️ No admin picks available.")
+        for msg in messages:
+            await msg.copy(chat_id=message.chat.id)
 
-    text = "👑 **Editor's Picks (Admin Selected):**\n\n"
-    for idx, file in enumerate(files, start=1):
-        text += f"{idx}. `{file['file_name']}` — 🆔 `{file['file_id']}`\n"
-    await message.reply(text)
+    except Exception as e:
+        await message.reply(f"🚫 Error fetching popular content:\n`{e}`")
 
-# ✅ Admin command to feature a file as admin pick
-@Client.on_message(filters.command("feature") & filters.private & filters.user(ADMINS))
-async def feature_file_admin(client, message):
-    if len(message.command) < 2:
-        return await message.reply("⚠️ Provide the file_id to feature.\n\nUsage: `/feature <file_id>`")
+@Client.on_callback_query(filters.regex("refresh_popular"))
+async def refresh_popular_callback(client, callback_query):
+    try:
+        popular_channel_id = POPULAR_CHANNEL_ID
+        if not popular_channel_id:
+            return await callback_query.answer("❌ Popular channel not configured.", show_alert=True)
 
-    file_id = message.command[1]
-    from bot.database.popular import mark_as_admin_pick
-    success = await mark_as_admin_pick(file_id)
+        messages = []
+        async for msg in client.get_chat_history(popular_channel_id, limit=20):
+            if msg.media:
+                messages.append(msg)
+            if len(messages) >= 10:
+                break
 
-    if success:
-        await message.reply("✅ File successfully marked as Admin Pick.")
-    else:
-        await message.reply("❌ Failed to mark file as Admin Pick.")
+        if not messages:
+            return await callback_query.answer("⚠️ No popular content found.", show_alert=True)
 
-# 🔄 /refreshpopular: Admin-only command to manually recalculate trends/popular
-@Client.on_message(filters.command("refreshpopular") & filters.private & filters.user(ADMINS))
-async def refresh_popular_data(client, message):
-    from bot.database.popular import refresh_popular_stats
-    await refresh_popular_stats()
-    await message.reply("♻️ Popular/trending stats refreshed.")
+        await callback_query.answer("🔄 Popular files refreshed!")
+        for msg in messages:
+            await msg.copy(chat_id=callback_query.message.chat.id)
 
-# 🔘 Button-based access for Trending & Popular
-@Client.on_callback_query(filters.regex("show_popular"))
-async def callback_popular(client, callback_query):
-    files = await get_popular_files(limit=5)
-    text = "⭐ **Popular Files:**\n\n" + "\n".join(
-        [f"{i+1}. `{f['file_name']}` — 👁️ {f['views']} views" for i, f in enumerate(files)]
-    )
-    await callback_query.message.edit_text(
-        text=text,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back_to_menu")]])
-    )
-
-@Client.on_callback_query(filters.regex("show_trending"))
-async def callback_trending(client, callback_query):
-    files = await get_trending_files(limit=5)
-    text = "🔥 **Trending Downloads:**\n\n" + "\n".join(
-        [f"{i+1}. `{f['file_name']}` — 📥 {f['download_count']} downloads" for i, f in enumerate(files)]
-    )
-    await callback_query.message.edit_text(
-        text=text,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back_to_menu")]])
-    )
+    except Exception as e:
+        await callback_query.message.reply(f"🚫 Error:\n`{e}`")
