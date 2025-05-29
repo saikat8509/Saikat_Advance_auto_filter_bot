@@ -1,61 +1,52 @@
-# bot/handlers/fsub.py
-
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import FORCE_SUB_CHANNELS, AUTO_APPROVE_FSUB
-from database.user_db import approve_user
-from utils.admins import is_admin
+from bot.utils.database import is_user_subscribed
+from pyrogram.errors import UserNotParticipant, ChannelPrivate
 
-# 🔧 ForceSub Check Function
-async def check_force_sub(client: Client, user_id: int):
-    from pyrogram.errors import UserNotParticipant, ChatAdminRequired
-
+async def check_force_subscribe(client: Client, message: Message):
     if not FORCE_SUB_CHANNELS:
-        return True  # No FSUB needed
+        return True  # No channels to force subscribe
 
     for channel in FORCE_SUB_CHANNELS:
         try:
-            member = await client.get_chat_member(chat_id=channel, user_id=user_id)
-            if member.status not in ("member", "administrator", "creator"):
-                raise UserNotParticipant
+            user = await client.get_chat_member(channel, message.from_user.id)
+            if user.status in ("member", "administrator", "creator"):
+                return True if AUTO_APPROVE_FSUB else None
         except UserNotParticipant:
-            return channel  # User not subscribed
-        except ChatAdminRequired:
-            continue  # Bot not admin in channel
+            continue
+        except ChannelPrivate:
+            continue
+        except Exception:
+            continue
 
-    # ✅ Auto-approve if enabled
-    if AUTO_APPROVE_FSUB:
-        await approve_user(user_id)
+    # Not subscribed to any required channel
+    buttons = [
+        [InlineKeyboardButton("📢 Join Update Channel", url=f"https://t.me/{FORCE_SUB_CHANNELS[0].lstrip('@')}")],
+        [InlineKeyboardButton("✅ I've Joined", callback_data="check_fsub")]
+    ]
+    await message.reply_text(
+        "🚫 To use this bot, you must join our update channel first!",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        disable_web_page_preview=True
+    )
+    return False
 
-    return True  # All FSUB passed
+@Client.on_callback_query(filters.regex("check_fsub"))
+async def recheck_fsub(client, callback_query):
+    user_id = callback_query.from_user.id
+    ok = False
 
-# 🧪 Command to test FSUB manually
-@Client.on_message(filters.command("check_fsub"))
-async def manual_fsub_check(client, message: Message):
-    user_id = message.from_user.id
-    check = await check_force_sub(client, user_id)
-    if check is True:
-        return await message.reply("✅ You have joined all required channels.")
+    for channel in FORCE_SUB_CHANNELS:
+        try:
+            member = await client.get_chat_member(channel, user_id)
+            if member.status in ("member", "administrator", "creator"):
+                ok = True
+                break
+        except Exception:
+            continue
+
+    if ok:
+        await callback_query.message.edit_text("✅ You’ve successfully joined. You can now use the bot.")
     else:
-        btn = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔔 Join Channel", url=f"https://t.me/{check}")],
-             [InlineKeyboardButton("✅ I've Joined", callback_data="verify_fsub")]]
-        )
-        await message.reply("🚫 Please join the required channel to continue:", reply_markup=btn)
-
-# ✅ Callback to recheck after user joins
-@Client.on_callback_query(filters.regex("verify_fsub"))
-async def fsub_verify_callback(client, callback):
-    user_id = callback.from_user.id
-    check = await check_force_sub(client, user_id)
-    if check is True:
-        await callback.message.edit_text("✅ Thank you! You're verified.")
-    else:
-        await callback.message.edit_text("🚫 Still not joined. Please join and try again.")
-
-# 🛠 Admin Command: Toggle FSUB Auto-Approve
-@Client.on_message(filters.command("toggle_fsub_auto") & filters.user(is_admin))
-async def toggle_fsub_auto(client, message: Message):
-    from config import toggle_auto_approve_fsub
-    state = toggle_auto_approve_fsub()
-    await message.reply(f"⚙️ Auto-Approve FSUB is now {'Enabled ✅' if state else 'Disabled ❌'}.")
+        await callback_query.answer("❌ You still haven't joined the channel.", show_alert=True)
