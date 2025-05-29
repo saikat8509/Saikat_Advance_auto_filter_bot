@@ -95,7 +95,7 @@ PREMIUM_FEATURES = os.getenv("PREMIUM_FEATURES", """○ ɴᴏ ɴᴇᴇᴅ ᴛᴏ
 PREMIUM_FOOTER = os.getenv("PREMIUM_FOOTER", f"🖼️ Upload your payment screenshot below (auto verification enabled)\n💬 Or DM {OWNER_USERNAME} if any issues\n📂 Proofs: {PAYMENT_PROOF_CHANNEL_URL}")
 
 # === Token Verification ===
-ENABLE_TOKEN_VERIFICATION = os.getenv("ENABLE_TOKEN_VERIFICATION", "True").lower() == "true"
+ENABLE_TOKEN_VERIFICATION = os.getenv("ENABLE_TOKEN_VERIFICATION", "True").lower() == "False"
 SHORTENER_APIS = json.loads(os.getenv("SHORTENER_APIS_JSON", "{}"))
 
 # === Screenshot AI Verification ===
