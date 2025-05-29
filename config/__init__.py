@@ -2,7 +2,7 @@ import os
 import json
 
 # === Telegram Bot Credentials ===
-API_ID = int(os.getenv("API_ID", "23584757"))
+API_ID = os.getenv("API_ID", "23584757")
 API_HASH = os.getenv("API_HASH", "ac9926d2cb8acc38413f5e93881fd514")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
@@ -26,16 +26,16 @@ MOVIE_GROUP_URL = os.getenv("MOVIE_GROUP_URL", "https://t.me/Creazy_Movie_Surch_
 SUPPORT_GROUP_URL = os.getenv("SUPPORT_GROUP_URL", "https://t.me/Leazy_support_group")
 
 # === Log Channel ===
-LOG_CHANNEL = int(os.getenv("LOG_CHANNEL", "-1002187892688"))
+LOG_CHANNEL = os.getenv("LOG_CHANNEL", "-1002187892688")
 
 # === Force Subscribe ===
 FORCE_SUB_CHANNELS = os.getenv("FORCE_SUB_CHANNELS", "@creazy_trending_movie_channel @creazy_popular_movie_channel @ceazy_backup_X").split()
 AUTO_APPROVE_FSUB = os.getenv("AUTO_APPROVE_FSUB", "True").lower() == "true"
 
 # === Database Channels ===
-DATABASE_CHANNEL_IDS = list(map(int, os.getenv("DATABASE_CHANNEL_IDS", "-1002308876940 -1002509542265 -1002649284010 -1002287841044").split()))
+DATABASE_CHANNEL_IDS = os.getenv("DATABASE_CHANNEL_IDS", "-1002308876940 -1002509542265 -1002649284010 -1002287841044").split()
 
-# === Welcome & Goodbye ===
+# === Welcome & Goodbye Images ===
 WELCOME_IMAGE_URL = os.getenv("WELCOME_IMAGE_URL", "https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg")
 GOODBYE_IMAGE_URL = os.getenv("GOODBYE_IMAGE_URL", "https://graph.org/file/6b0c4cb1c0d90aadf7a4b-89e2cfdafea4b6acff.jpg")
 
@@ -43,12 +43,12 @@ GOODBYE_IMAGE_URL = os.getenv("GOODBYE_IMAGE_URL", "https://graph.org/file/6b0c4
 ABOUT_IMAGE_URL = os.getenv("ABOUT_IMAGE_URL", "https://graph.org/file/dff6201d94d8c1921a7d2-1a026674213213b846.jpg")
 
 # === Channels for Popular, Trending, Requests ===
-POPULAR_CHANNEL_ID = int(os.getenv("POPULAR_CHANNEL_ID", "-1002619662804"))
-TRENDING_CHANNEL_ID = int(os.getenv("TRENDING_CHANNEL_ID", "-1002619662804"))
-REQUEST_CHANNEL_ID = int(os.getenv("REQUEST_CHANNEL_ID", "-1002303567438"))
+POPULAR_CHANNEL_ID = os.getenv("POPULAR_CHANNEL_ID", "-1002619662804")
+TRENDING_CHANNEL_ID = os.getenv("TRENDING_CHANNEL_ID", "-1002619662804")
+REQUEST_CHANNEL_ID = os.getenv("REQUEST_CHANNEL_ID", "-1002303567438")
 
 # === Deployment Port ===
-PORT = int(os.getenv("PORT", "8080"))
+PORT = os.getenv("PORT", "8080")
 
 # === Premium Plans ===
 PREMIUM_PLANS = {
@@ -79,8 +79,8 @@ WISHES = {
 }
 
 # === Premium System Settings ===
-TRIAL_DURATION_HOURS = int(os.getenv("TRIAL_DURATION_HOURS", "3"))
-REFERRAL_REWARD_DAYS = int(os.getenv("REFERRAL_REWARD_DAYS", "15"))
+TRIAL_DURATION_HOURS = os.getenv("TRIAL_DURATION_HOURS", "3")
+REFERRAL_REWARD_DAYS = os.getenv("REFERRAL_REWARD_DAYS", "15")
 
 # === Premium Display ===
 PREMIUM_HEADER = os.getenv("PREMIUM_HEADER", "🔥 Unlock Premium Benefits Now!\n")
@@ -95,11 +95,11 @@ PREMIUM_FEATURES = os.getenv("PREMIUM_FEATURES", """○ ɴᴏ ɴᴇᴇᴅ ᴛᴏ
 PREMIUM_FOOTER = os.getenv("PREMIUM_FOOTER", f"🖼️ Upload your payment screenshot below (auto verification enabled)\n💬 Or DM {OWNER_USERNAME} if any issues\n📂 Proofs: {PAYMENT_PROOF_CHANNEL_URL}")
 
 # === Token Verification ===
-ENABLE_TOKEN_VERIFICATION = os.getenv("ENABLE_TOKEN_VERIFICATION", "True").lower() == "False"
+ENABLE_TOKEN_VERIFICATION = os.getenv("ENABLE_TOKEN_VERIFICATION", "True").lower() == "true"
 SHORTENER_APIS = json.loads(os.getenv("SHORTENER_APIS_JSON", "{}"))
 
 # === Screenshot AI Verification ===
-ENABLE_SCREENSHOT_AI = os.getenv("ENABLE_SCREENSHOT_AI", "True").lower() == "true"
+ENABLE_SCREENSHOT_AI = os.getenv("ENABLE_SCREENSHOT_AI", "False").lower() == "False"
 OCR_PROVIDER = os.getenv("OCR_PROVIDER", "tesseract")
 
 # === Admin QR Code Image ===
