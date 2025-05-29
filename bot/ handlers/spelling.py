@@ -1,86 +1,58 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from config import TUTORIAL_CHANNEL_URL, PREMIUM_HEADER
+from bot.utils.database import (
+    get_similar_queries,
+    is_premium_user,
+    log_search,
+)
+from bot.plugins.url_shortener import shorten_url
+import random
 
-from bot.utils.database import db
-
-# For spelling correction, using TextBlob or you can customize this.
-# Install via: pip install textblob
-from textblob import TextBlob
-
-# Optional: You can implement caching, user limits, or premium check with db
+# Optional: fallback text if nothing is found
+NO_RESULTS_TEXT = "❌ No similar results found. Try a different search term."
 
 @Client.on_message(filters.command("spelling") & filters.private)
 async def spelling_handler(client: Client, message: Message):
-    """
-    Handle /spelling command in private chat.
-    Usage: /spelling <text>
-    Replies with corrected spelling.
-    """
+    if len(message.command) < 2:
+        return await message.reply_text("Usage: `/spelling <search term>`", quote=True)
 
+    query = message.text.split(" ", 1)[1].strip()
     user_id = message.from_user.id
-    text = message.text
+    is_premium = await is_premium_user(user_id)
 
-    # Extract the text to check
-    parts = text.split(None, 1)
-    if len(parts) < 2:
-        await message.reply_text(
-            "Please provide the text to check.\n\nUsage: `/spelling your_text_here`",
-            parse_mode="markdown",
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [InlineKeyboardButton("Help", callback_data="help_spelling")]
-                ]
-            )
-        )
-        return
+    # Log the search
+    await log_search(user_id, query)
 
-    user_text = parts[1].strip()
-    if not user_text:
-        await message.reply_text("Please provide valid text to check spelling.")
-        return
+    # Get spelling suggestions (from database or custom logic)
+    suggestions = await get_similar_queries(query)
 
-    # Optional: Log user query or usage count
-    await db.add_user(user_id)  # make sure user is tracked
+    if not suggestions:
+        return await message.reply_text(NO_RESULTS_TEXT, quote=True)
 
-    # Spell correction using TextBlob
-    blob = TextBlob(user_text)
-    corrected_text = str(blob.correct())
+    buttons = []
+    for suggestion in suggestions[:10]:  # Limit to top 10
+        if is_premium:
+            # Premium users get direct file link
+            buttons.append([
+                InlineKeyboardButton(text=suggestion, callback_data=f"request#{suggestion}")
+            ])
+        else:
+            # Non-premium users get shortened link with token verification
+            shortened = await shorten_url(f"https://t.me/{client.me.username}?start={suggestion.replace(' ', '_')}")
+            buttons.append([
+                InlineKeyboardButton(text=suggestion, url=shortened)
+            ])
 
-    if corrected_text.lower() == user_text.lower():
-        reply_msg = "✅ No spelling mistakes found!"
-    else:
-        reply_msg = f"📝 **Original:** {user_text}\n\n✅ **Corrected:** {corrected_text}"
+    # Add tutorial/help link for non-premium
+    if not is_premium:
+        buttons.append([
+            InlineKeyboardButton("❓ How To Download", url=TUTORIAL_CHANNEL_URL)
+        ])
 
-    # Reply with the result and buttons for support / groups / more help
-    buttons = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("Support Group", url="https://t.me/Leazy_support_group"),
-                InlineKeyboardButton("Movie Group", url="https://t.me/Creazy_Movie_Surch_Group")
-            ],
-            [
-                InlineKeyboardButton("Tutorial Channel", url="https://t.me/How_to_open_file_to_link"),
-                InlineKeyboardButton("Update Channel", url="https://t.me/creazy_announcement_hub")
-            ],
-        ]
-    )
-
-    await message.reply_text(reply_msg, parse_mode="markdown", reply_markup=buttons)
-
-
-# Optional: Callback query handler for help or buttons (if needed)
-@Client.on_callback_query(filters.regex("^help_spelling$"))
-async def help_spelling_callback(client: Client, callback_query):
-    await callback_query.answer()
-    await callback_query.message.edit_text(
-        "**Spelling Command Help**\n\n"
-        "Use `/spelling <text>` to check and correct spelling mistakes in your message.\n\n"
-        "Example:\n"
-        "`/spelling teh quik brown fox`\n"
-        "Will return corrected text.\n\n"
-        "If you need further assistance, join our Support Group.",
-        parse_mode="markdown",
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Support Group", url="https://t.me/Leazy_support_group")]]
-        )
+    await message.reply_photo(
+        photo=random.choice(PREMIUM_HEADER.split("\n")),  # or a spelling banner image from config
+        caption="🔍 **Did you mean:**",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        parse_mode="markdown"
     )
