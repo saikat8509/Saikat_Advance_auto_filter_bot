@@ -1,106 +1,102 @@
-# bot/plugins/screenshot.py
+import os
+import tempfile
+import pytesseract
+from PIL import Image
+from datetime import datetime
 
-import io
-import logging
 from pyrogram import Client, filters
 from pyrogram.types import Message
-from config import ENABLE_SCREENSHOT_AI, OCR_PROVIDER
-from bot.utils.database import add_premium_user, get_premium_plans
-from PIL import Image
-import pytesseract
 
-logger = logging.getLogger(__name__)
+from config import PREMIUM_PLANS, AI_VERIFICATION_PROVIDER, MINIMUM_PAYMENT_AMOUNT
+from bot.utils.database import add_premium_user
+from bot.utils.time import get_plan_expiry
+from bot.utils.logger import log
 
-async def extract_text_from_image(image_bytes: bytes) -> str:
-    """
-    Extract text from an image bytes using OCR provider.
-    Currently supports 'tesseract'.
-    """
-    if OCR_PROVIDER.lower() == "tesseract":
-        image = Image.open(io.BytesIO(image_bytes))
-        text = pytesseract.image_to_string(image)
-        return text
+# AI Screenshot Verification
+async def extract_text_from_image(image_path: str) -> str:
+    if AI_VERIFICATION_PROVIDER == "tesseract":
+        return pytesseract.image_to_string(Image.open(image_path))
     else:
-        logger.warning(f"OCR provider '{OCR_PROVIDER}' not supported yet.")
-        return ""
+        raise NotImplementedError("Only tesseract provider is supported currently.")
 
-def parse_payment_details(text: str) -> dict:
-    """
-    Parse OCR text to find payment amount and transaction ID.
-    This function must be customized based on payment screenshot format.
-    Example simplistic parse: looks for lines containing 'Amount' and 'Txn ID'
-    """
-    details = {}
-    lines = text.split("\n")
+def extract_payment_info(ocr_text: str) -> dict:
+    lines = ocr_text.splitlines()
+    info = {
+        "amount": None,
+        "txn_id": None,
+        "timestamp": None
+    }
     for line in lines:
-        line = line.strip()
-        if "amount" in line.lower():
-            # Extract numbers from line
-            import re
-            amounts = re.findall(r"\d+\.?\d*", line)
-            if amounts:
-                details["amount"] = float(amounts[0])
-        if "txn" in line.lower() or "transaction" in line.lower() or "id" in line.lower():
-            # Extract txn id (simplistic)
-            parts = line.split(":")
-            if len(parts) > 1:
-                details["txn_id"] = parts[1].strip()
-    return details
+        if not info["amount"] and ("rs" in line.lower() or ₹ in line):
+            for word in line.split():
+                if word.replace(",", "").replace(".", "").isdigit():
+                    try:
+                        amt = float(word.replace(",", ""))
+                        if amt >= MINIMUM_PAYMENT_AMOUNT:
+                            info["amount"] = amt
+                            break
+                    except:
+                        continue
 
-def match_plan_by_amount(amount: float, plans: dict) -> dict:
-    """
-    Match the extracted amount with a premium plan.
-    plans dict format:
-    { "plan_key": {"price": 99, "days": 30, "label": "30 Days"} }
-    """
-    for key, plan in plans.items():
-        if abs(plan.get("price", 0) - amount) < 1.0:  # Allow slight float diff
-            return plan
-    return None
+        if not info["txn_id"] and ("txn" in line.lower() or "transaction" in line.lower()):
+            words = line.split()
+            for word in words:
+                if len(word) >= 8 and any(char.isdigit() for char in word):
+                    info["txn_id"] = word
+                    break
+
+        if not info["timestamp"] and any(tok in line.lower() for tok in ["am", "pm"]):
+            info["timestamp"] = line.strip()
+
+    return info
+
+def get_matching_plan(amount: float) -> tuple:
+    for days, plan in PREMIUM_PLANS.items():
+        if amount >= plan["price"]:
+            return days, plan["label"]
+    return None, None
 
 @Client.on_message(filters.private & filters.photo)
-async def payment_screenshot_handler(client: Client, message: Message):
-    if not ENABLE_SCREENSHOT_AI:
-        return  # feature disabled
-    
+async def handle_payment_screenshot(client: Client, message: Message):
     user_id = message.from_user.id
     photo = message.photo
 
-    # Download the photo into memory
-    photo_bytes = await client.download_media(photo, in_memory=True)
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tf:
+            path = await message.download(file_name=tf.name)
 
-    # Extract text using OCR
-    text = await extract_text_from_image(photo_bytes)
-    logger.info(f"OCR text extracted: {text}")
+        ocr_text = await extract_text_from_image(path)
+        extracted_info = extract_payment_info(ocr_text)
 
-    if not text:
-        await message.reply_text("⚠️ Could not read the screenshot properly. Please send a clear payment screenshot.")
-        return
+        log(f"OCR extracted from user {user_id}: {extracted_info}")
 
-    # Parse payment details
-    payment_info = parse_payment_details(text)
-    if "amount" not in payment_info:
-        await message.reply_text("⚠️ Could not find the payment amount in the screenshot. Please try again.")
-        return
+        amount = extracted_info.get("amount")
+        txn_id = extracted_info.get("txn_id")
+        timestamp = extracted_info.get("timestamp")
 
-    plans = await get_premium_plans()
-    matched_plan = match_plan_by_amount(payment_info["amount"], plans)
+        if not amount or not txn_id:
+            await message.reply_text("❌ Could not verify the payment. Please make sure the screenshot is clear and try again or contact admin.")
+            return
 
-    if not matched_plan:
+        plan_days, plan_label = get_matching_plan(amount)
+        if not plan_days:
+            await message.reply_text("❌ Payment amount does not match any valid premium plan.")
+            return
+
+        await add_premium_user(user_id, plan_days, plan_label)
+
+        expiry_date = get_plan_expiry(plan_days)
         await message.reply_text(
-            "❌ Payment amount does not match any of our premium plans.\n"
-            "Please check and send a valid payment screenshot."
-        )
-        return
+            f"✅ Payment verified successfully!
 
-    # Grant premium to user
-    days = matched_plan.get("days", 0)
-    success = await add_premium_user(user_id, days)
-    if success:
-        await message.reply_text(
-            f"✅ Payment verified successfully! You have been granted premium access for {days} days.\n"
-            f"Thank you for your support!"
+💠 Premium Plan: {plan_label}
+💰 Amount: ₹{amount}
+📅 Expires on: {expiry_date.strftime('%d %B, %Y')}\n\nThank you for your support!"
         )
-    else:
-        await message.reply_text("⚠️ There was an error granting your premium access. Please contact support.")
 
+    except Exception as e:
+        log(f"Error verifying screenshot: {e}")
+        await message.reply_text("❌ An error occurred during verification. Please contact support.")
+    finally:
+        if os.path.exists(path):
+            os.remove(path)
