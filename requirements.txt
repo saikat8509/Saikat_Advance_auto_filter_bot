@@ -7,7 +7,7 @@ python-dotenv==1.0.0
 pymongo[srv]==4.3.3
 python-telegram-bot==20.3
 opencv-python-headless==4.8.0.74
-tesserocr==2.5.1
+tesserocr>=2.5.2
 pyspellchecker==0.8.3
 python-multipart==0.0.5
 PyYAML==6.0
