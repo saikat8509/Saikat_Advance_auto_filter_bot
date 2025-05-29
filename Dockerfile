@@ -1,22 +1,25 @@
-# Use official slim Python image
-FROM python:3.11-slim
+# Use official Python base image
+FROM python:3.10-slim
 
-# Set working directory
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Set work directory
 WORKDIR /app
 
-# Install build tools (gcc, etc.) for compiling dependencies like tgcrypto
-RUN apt-get update && \
-    apt-get install -y gcc build-essential && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy all project files into the container
-COPY . .
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Set PYTHONPATH so modules can be resolved correctly
-ENV PYTHONPATH=/app
+# Copy the full source code
+COPY . /app
 
-# Run the main module
+# Run the bot
 CMD ["python", "-m", "bot.main"]
