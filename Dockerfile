@@ -27,18 +27,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
+FROM python:3.11-slim
+
 WORKDIR /app
 
-# Copy requirements first to leverage Docker cache
-COPY requirements.txt .
-
-# Upgrade pip and install Python dependencies
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copy rest of the source code
 COPY . .
 
-# Default command
+RUN pip install --no-cache-dir -r requirements.txt
+
+ENV PYTHONPATH=/app
+
 CMD ["python", "bot/main.py"]
