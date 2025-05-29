@@ -1,64 +1,47 @@
 # bot/utils/ai_spellcheck.py
 
 import difflib
+import logging
 from typing import List, Optional
-from rapidfuzz import fuzz, process
 
-# Optional: You can replace this with OpenAI GPT, spellchecker, or other AI models
-# For now, we use fuzzy string matching as a fast and offline solution
+from bot.utils.database import get_all_keywords
 
-def suggest_titles(user_query: str, database_titles: List[str], max_suggestions: int = 5) -> List[str]:
+logger = logging.getLogger(__name__)
+
+async def get_close_matches_from_db(query: str, limit: int = 5) -> List[str]:
     """
-    Suggests close-matching titles from the indexed movie titles using fuzzy matching.
+    Return a list of close matching keywords from the database using difflib.
+    
+    Args:
+        query (str): User's query input.
+        limit (int): Max number of close matches to return.
+
+    Returns:
+        List[str]: List of similar keyword strings.
     """
-    if not user_query or not database_titles:
+    try:
+        all_keywords = await get_all_keywords()
+        if not all_keywords:
+            return []
+
+        matches = difflib.get_close_matches(query, all_keywords, n=limit, cutoff=0.5)
+        return matches
+    except Exception as e:
+        logger.error(f"Failed to find close matches: {e}")
         return []
 
-    # Using RapidFuzz for better performance and accuracy
-    matches = process.extract(
-        user_query, database_titles, scorer=fuzz.ratio, limit=max_suggestions
-    )
-
-    # Return only the matched titles
-    return [match[0] for match in matches if match[1] >= 60]  # Only high-similarity matches
-
-
-def get_best_match(user_query: str, database_titles: List[str]) -> Optional[str]:
+async def suggest_spelling(query: str) -> Optional[List[str]]:
     """
-    Returns the single best match for a given user query.
+    Suggest similar spellings for a user's misspelled query.
+
+    Args:
+        query (str): The input query to correct.
+
+    Returns:
+        Optional[List[str]]: A list of suggested keywords, or None if none found.
     """
-    if not user_query or not database_titles:
+    if not query or len(query) < 3:
         return None
 
-    best_match = process.extractOne(user_query, database_titles, scorer=fuzz.ratio)
-    if best_match and best_match[1] >= 70:
-        return best_match[0]
-
-    return None
-
-
-# Optional AI fallback using OpenAI (if you enable it)
-# Requires setting OPENAI_API_KEY in your env
-
-"""
-import openai
-import os
-
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
-def ai_correct_query(query: str) -> str:
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant for correcting movie titles."},
-                {"role": "user", "content": f"Correct this movie title spelling: {query}"}
-            ],
-            temperature=0.2,
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"[OpenAI ERROR] {e}")
-        return query  # Fallback to original query
-"""
-
+    suggestions = await get_close_matches_from_db(query)
+    return suggestions if suggestions else None
