@@ -1,69 +1,78 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from config import MONGO_DB_URI, LOG_CHANNEL
-import asyncio
+from config import MONGODB_URI
+
+client = AsyncIOMotorClient(MONGODB_URI)
+db = client["autofilter_bot"]
+users_collection = db["users"]
+
 
 class Database:
     def __init__(self):
-        self.client = AsyncIOMotorClient(MONGO_DB_URI)
-        self.db = self.client['autofilter_bot_db']
-        self.users = self.db['users']
-        self.files = self.db['files']
-        self.referrals = self.db['referrals']
-        self.premium = self.db['premium']
-        self.logs = self.db['logs']
+        self.collection = users_collection
 
-    # User management
-    async def add_user(self, user_id: int, username: str = None):
-        user = await self.users.find_one({"user_id": user_id})
-        if not user:
-            await self.users.insert_one({"user_id": user_id, "username": username, "joined_at": asyncio.get_event_loop().time()})
-            return True
-        return False
+    async def add_user(self, user_id: int, referred_by: int = None):
+        existing = await self.collection.find_one({"user_id": user_id})
+        if existing:
+            return
 
-    async def is_premium(self, user_id: int) -> bool:
-        premium_user = await self.premium.find_one({"user_id": user_id})
-        if premium_user:
-            from datetime import datetime
-            expire_ts = premium_user.get("expires_at")
-            if expire_ts and expire_ts > datetime.utcnow().timestamp():
-                return True
-            else:
-                # Expired premium - remove
-                await self.premium.delete_one({"user_id": user_id})
-        return False
+        user_data = {
+            "user_id": user_id,
+            "is_premium": False,
+            "is_trial": False,
+            "referred_by": referred_by,
+            "referral_count": 0,
+        }
 
-    async def add_premium(self, user_id: int, duration_days: int):
-        from datetime import datetime, timedelta
-        expire_time = datetime.utcnow() + timedelta(days=duration_days)
-        await self.premium.update_one(
+        await self.collection.insert_one(user_data)
+
+        # Increment referral count for the referrer if valid
+        if referred_by:
+            await self.collection.update_one(
+                {"user_id": referred_by},
+                {"$inc": {"referral_count": 1}}
+            )
+
+    async def total_users(self) -> int:
+        return await self.collection.count_documents({})
+
+    async def count_premium_users(self) -> int:
+        return await self.collection.count_documents({"is_premium": True})
+
+    async def count_trial_users(self) -> int:
+        return await self.collection.count_documents({"is_trial": True})
+
+    async def total_referred_users(self) -> int:
+        return await self.collection.count_documents({"referred_by": {"$ne": None}})
+
+    async def total_referral_count(self) -> int:
+        # Sum up all referral_count fields across all users
+        pipeline = [
+            {"$group": {"_id": None, "total": {"$sum": "$referral_count"}}}
+        ]
+        result = await self.collection.aggregate(pipeline).to_list(length=1)
+        return result[0]["total"] if result else 0
+
+    async def set_premium(self, user_id: int, is_premium: bool = True):
+        await self.collection.update_one(
             {"user_id": user_id},
-            {"$set": {"expires_at": expire_time.timestamp()}},
+            {"$set": {"is_premium": is_premium}},
             upsert=True
         )
 
-    # Referral system
-    async def add_referral(self, referrer_id: int, referred_id: int):
-        ref = await self.referrals.find_one({"referrer_id": referrer_id, "referred_id": referred_id})
-        if not ref:
-            await self.referrals.insert_one({"referrer_id": referrer_id, "referred_id": referred_id, "timestamp": asyncio.get_event_loop().time()})
-            return True
-        return False
+    async def set_trial(self, user_id: int, is_trial: bool = True):
+        await self.collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"is_trial": is_trial}},
+            upsert=True
+        )
 
-    async def count_referrals(self, referrer_id: int) -> int:
-        count = await self.referrals.count_documents({"referrer_id": referrer_id})
-        return count
+    async def get_user(self, user_id: int):
+        return await self.collection.find_one({"user_id": user_id})
 
-    # File tracking (e.g. downloads, searches)
-    async def increment_file_download(self, file_id: str):
-        await self.files.update_one({"file_id": file_id}, {"$inc": {"downloads": 1}}, upsert=True)
+    async def get_referral_count(self, user_id: int) -> int:
+        data = await self.get_user(user_id)
+        return data.get("referral_count", 0) if data else 0
 
-    async def increment_file_search(self, file_id: str):
-        await self.files.update_one({"file_id": file_id}, {"$inc": {"searches": 1}}, upsert=True)
 
-    # Log events to a channel or DB
-    async def log_event(self, event_type: str, data: dict):
-        log_entry = {"type": event_type, "data": data, "timestamp": asyncio.get_event_loop().time()}
-        await self.logs.insert_one(log_entry)
-        # You may add code here to forward log to LOG_CHANNEL if desired.
-
+# Export database instance
 db = Database()
