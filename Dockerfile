@@ -1,23 +1,17 @@
-# Use an official lightweight Python image
 FROM python:3.10-slim
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Install system dependencies required for building packages like tgcrypto
+# Install build tools and dependencies
 RUN apt-get update && \
     apt-get install -y gcc python3-dev build-essential && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file into container
 COPY requirements.txt /app/
-
-# Install Python dependencies
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy the entire project into the container
+# Copy the entire project (including bot/, config/, etc.)
 COPY . /app/
 
-# Run the main bot application
+# Launch the bot module
 CMD ["python", "-m", "bot"]
