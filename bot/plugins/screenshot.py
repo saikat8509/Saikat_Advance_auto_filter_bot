@@ -1,51 +1,106 @@
-import os
-from pyrogram import filters, Client
+# bot/plugins/screenshot.py
+
+import io
+import logging
+from pyrogram import Client, filters
 from pyrogram.types import Message
-from config import ENABLE_SCREENSHOT_AI, OCR_PROVIDER, PREMIUM_REWARD_DAYS, OWNER_USERNAME
-from bot.utils.database import add_premium_user, get_user_referrer
-from bot.utils.screenshot_ai import extract_payment_info
-from datetime import datetime, timedelta
+from config import ENABLE_SCREENSHOT_AI, OCR_PROVIDER
+from bot.utils.database import add_premium_user, get_premium_plans
+from PIL import Image
+import pytesseract
 
-@Client.on_message(filters.private & filters.photo & filters.caption & filters.caption_contains("payment"))
-async def handle_payment_screenshot(client: Client, message: Message):
-    if not ENABLE_SCREENSHOT_AI:
-        await message.reply("🛑 Screenshot AI verification is currently disabled.")
-        return
+logger = logging.getLogger(__name__)
 
-    # Acknowledge receipt
-    await message.reply("🧠 Analyzing your screenshot... Please wait.")
-
-    # Download the image
-    file_path = await message.download()
-
-    # Extract data using OCR
-    extracted = extract_payment_info(file_path, provider=OCR_PROVIDER)
-    if not extracted:
-        await message.reply("❌ Failed to verify payment. Please ensure the screenshot is clear.")
-        return
-
-    user_id = message.from_user.id
-    valid_plan = extracted.get("valid_plan")
-    amount = extracted.get("amount")
-
-    if valid_plan:
-        # Grant premium
-        plan_days = int(valid_plan)
-        expiry = datetime.utcnow() + timedelta(days=plan_days)
-        await add_premium_user(user_id, expiry)
-
-        # Referral bonus check
-        referrer_id = await get_user_referrer(user_id)
-        if referrer_id and PREMIUM_REWARD_DAYS:
-            reward_expiry = datetime.utcnow() + timedelta(days=PREMIUM_REWARD_DAYS)
-            await add_premium_user(referrer_id, reward_expiry)
-
-        await message.reply(f"✅ Payment verified successfully!
-🎉 You have been granted premium access for {plan_days} days.")
+async def extract_text_from_image(image_bytes: bytes) -> str:
+    """
+    Extract text from an image bytes using OCR provider.
+    Currently supports 'tesseract'.
+    """
+    if OCR_PROVIDER.lower() == "tesseract":
+        image = Image.open(io.BytesIO(image_bytes))
+        text = pytesseract.image_to_string(image)
+        return text
     else:
-        await message.reply(f"⚠️ Couldn't find a valid plan in your screenshot.
-Please send the payment screenshot to @{OWNER_USERNAME.lstrip('@')} for manual verification.")
+        logger.warning(f"OCR provider '{OCR_PROVIDER}' not supported yet.")
+        return ""
 
-    # Cleanup
-    if os.path.exists(file_path):
-        os.remove(file_path)
+def parse_payment_details(text: str) -> dict:
+    """
+    Parse OCR text to find payment amount and transaction ID.
+    This function must be customized based on payment screenshot format.
+    Example simplistic parse: looks for lines containing 'Amount' and 'Txn ID'
+    """
+    details = {}
+    lines = text.split("\n")
+    for line in lines:
+        line = line.strip()
+        if "amount" in line.lower():
+            # Extract numbers from line
+            import re
+            amounts = re.findall(r"\d+\.?\d*", line)
+            if amounts:
+                details["amount"] = float(amounts[0])
+        if "txn" in line.lower() or "transaction" in line.lower() or "id" in line.lower():
+            # Extract txn id (simplistic)
+            parts = line.split(":")
+            if len(parts) > 1:
+                details["txn_id"] = parts[1].strip()
+    return details
+
+def match_plan_by_amount(amount: float, plans: dict) -> dict:
+    """
+    Match the extracted amount with a premium plan.
+    plans dict format:
+    { "plan_key": {"price": 99, "days": 30, "label": "30 Days"} }
+    """
+    for key, plan in plans.items():
+        if abs(plan.get("price", 0) - amount) < 1.0:  # Allow slight float diff
+            return plan
+    return None
+
+@Client.on_message(filters.private & filters.photo)
+async def payment_screenshot_handler(client: Client, message: Message):
+    if not ENABLE_SCREENSHOT_AI:
+        return  # feature disabled
+    
+    user_id = message.from_user.id
+    photo = message.photo
+
+    # Download the photo into memory
+    photo_bytes = await client.download_media(photo, in_memory=True)
+
+    # Extract text using OCR
+    text = await extract_text_from_image(photo_bytes)
+    logger.info(f"OCR text extracted: {text}")
+
+    if not text:
+        await message.reply_text("⚠️ Could not read the screenshot properly. Please send a clear payment screenshot.")
+        return
+
+    # Parse payment details
+    payment_info = parse_payment_details(text)
+    if "amount" not in payment_info:
+        await message.reply_text("⚠️ Could not find the payment amount in the screenshot. Please try again.")
+        return
+
+    plans = await get_premium_plans()
+    matched_plan = match_plan_by_amount(payment_info["amount"], plans)
+
+    if not matched_plan:
+        await message.reply_text(
+            "❌ Payment amount does not match any of our premium plans.\n"
+            "Please check and send a valid payment screenshot."
+        )
+        return
+
+    # Grant premium to user
+    days = matched_plan.get("days", 0)
+    success = await add_premium_user(user_id, days)
+    if success:
+        await message.reply_text(
+            f"✅ Payment verified successfully! You have been granted premium access for {days} days.\n"
+            f"Thank you for your support!"
+        )
+    else:
+        await message.reply_text("⚠️ There was an error granting your premium access. Please contact support.")
+
