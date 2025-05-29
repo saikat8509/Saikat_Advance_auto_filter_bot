@@ -1,15 +1,55 @@
-from pyrogram import Client
-from config import LOG_CHANNEL
+import logging
+import os
+from logging.handlers import RotatingFileHandler
 
-async def log_to_channel(bot: Client, message: str):
-    """Send a text log to the log channel."""
-    try:
-        await bot.send_message(LOG_CHANNEL, text=message)
-    except Exception as e:
-        print(f"[LOG ERROR] Failed to log to channel: {e}")
+LOG_DIR = os.getenv("LOG_DIR", "logs")
+LOG_FILE = os.path.join(LOG_DIR, "bot.log")
+MAX_LOG_SIZE = 5 * 1024 * 1024  # 5 MB
+BACKUP_COUNT = 5  # Number of backup log files to keep
+
+# Ensure log directory exists
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Create logger
+logger = logging.getLogger("autofilter_bot")
+logger.setLevel(logging.DEBUG)
+
+# Formatter for log messages
+formatter = logging.Formatter(
+    fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+# Rotating file handler to avoid huge logs
+file_handler = RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=MAX_LOG_SIZE,
+    backupCount=BACKUP_COUNT,
+    encoding="utf-8"
+)
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.DEBUG)
+
+# Console handler for stdout logging
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.INFO)
+
+# Add handlers to logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 
-async def log_exception(bot: Client, exception: Exception, context: str = ""):
-    """Log an exception with optional context."""
-    text = f"⚠️ <b>Exception Occurred</b>\n\n<b>Context:</b> <code>{context}</code>\n<b>Error:</b> <code>{exception}</code>"
-    await log_to_channel(bot, text)
+def get_logger(name: str = None) -> logging.Logger:
+    """
+    Returns a logger instance with the given name.
+    If no name is provided, returns the root autofilter_bot logger.
+    """
+    if name:
+        return logging.getLogger(f"autofilter_bot.{name}")
+    return logger
+
+
+# Example usage:
+# log = get_logger(__name__)
+# log.info("Bot started")
