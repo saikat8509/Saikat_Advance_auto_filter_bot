@@ -1,26 +1,27 @@
+# bot/plugins/__init__.py
+
 """
-bot/plugins/__init__.py
+This file is intentionally kept for plugin-level initializations.
 
-Initializer for all plugin modules in the 'plugins' folder.
-Ensures plugin discovery when using dynamic import or auto-loader.
-
-Structure-compliant with 36-point bot architecture.
+You can use this space to:
+- Register shared plugin-level variables/constants
+- Import all plugin modules (optional)
+- Initialize plugin-level utilities (e.g., a shared logger)
 """
 
-import os
-import importlib
+# Example: Importing plugin submodules so they're always loaded
+from . import url_shortener
 
-# This ensures that all plugins in this directory get imported automatically
-def load_plugins():
-    plugin_folder = os.path.dirname(__file__)
-    for file in os.listdir(plugin_folder):
-        if file.endswith(".py") and file != "__init__.py":
-            module_name = f"bot.plugins.{file[:-3]}"
-            try:
-                importlib.import_module(module_name)
-                print(f"[PLUGIN] Loaded: {module_name}")
-            except Exception as e:
-                print(f"[PLUGIN ERROR] Failed to load {module_name}: {e}")
+# Optionally, preload/initialize something globally (like a logger)
+import logging
 
-# Automatically load all plugins when this module is imported
-load_plugins()
+logger = logging.getLogger("bot.plugins")
+logger.setLevel(logging.INFO)
+
+# If needed, attach default handler
+if not logger.hasHandlers():
+    from logging import StreamHandler
+    handler = StreamHandler()
+    logger.addHandler(handler)
+
+logger.info("✅ bot.plugins initialized successfully.")
