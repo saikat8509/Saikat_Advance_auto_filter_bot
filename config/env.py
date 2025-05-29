@@ -19,6 +19,17 @@ PAYMENT_PROOF_CHANNEL_URL=https://t.me/creazy_payments_proof
 # Force Subscribe channels (comma separated usernames without @)
 FORCE_SUBSCRIBE_CHANNELS=creazy_announcement_hub,Leazy_support_group
 
+
+# Premium plans prices (optional if you want to override)
+PREMIUM_PLAN_7_PRICE=50
+PREMIUM_PLAN_15_PRICE=100
+PREMIUM_PLAN_30_PRICE=150
+PREMIUM_PLAN_90_PRICE=400
+
+# Trial and referral durations
+TRIAL_DURATION_DAYS=3
+REFERRAL_REWARD_DAYS=7
+
 # Welcome and Goodbye images (graph.org URLs)
 WELCOME_IMAGE_URL=https://graph.org/file/yourwelcomeimage.jpg
 GOODBYE_IMAGE_URL=https://graph.org/file/yourgoodbyeimage.jpg
