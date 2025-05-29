@@ -1,63 +1,121 @@
-import os
-import pytesseract
-import tempfile
+import io
 import re
-from PIL import Image
+import logging
+import aiohttp
 from google.cloud import vision
-from config import OCR_PROVIDER
+from google.cloud.vision_v1 import types
+from PIL import Image
+from bot.utils.log import get_logger
+from bot.config import SCREENSHOT_AI_CONFIG
+
+logger = get_logger(__name__)
+
+# Initialize Google Vision client (assumes GOOGLE_APPLICATION_CREDENTIALS env var set)
+try:
+    client = vision.ImageAnnotatorClient()
+except Exception as e:
+    logger.error(f"Failed to initialize Google Vision client: {e}")
+    client = None
 
 
-def extract_text_tesseract(image_path: str) -> str:
+async def fetch_image_bytes(url: str) -> bytes:
+    """
+    Download image bytes from a URL asynchronously.
+    """
     try:
-        img = Image.open(image_path)
-        text = pytesseract.image_to_string(img)
-        return text
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    return await response.read()
+                else:
+                    logger.warning(f"Failed to fetch image, status code: {response.status}")
     except Exception as e:
-        return f"Tesseract OCR error: {e}"
+        logger.error(f"Error fetching image from {url}: {e}")
+    return b""
 
 
-def extract_text_google(image_path: str) -> str:
+def parse_payment_text(text: str):
+    """
+    Parse payment info from extracted OCR text.
+    Expected to find:
+     - amount (₹ or Rs.)
+     - transaction ID or ref no.
+     - date/time
+    Returns dict with keys: amount, txn_id, datetime or None if invalid.
+    """
+    # Example regex patterns (can be customized)
+    amount_pattern = r"(₹|Rs\.?)\s?(\d+[.,]?\d*)"
+    txn_pattern = r"(Txn\s?ID|Transaction\s?ID|Ref\.?|Reference)\s*[:\-]?\s*([A-Za-z0-9]+)"
+    datetime_pattern = r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}[\sT]?\d{1,2}:\d{2}(?:[:\d{2}]*)?)"
+
+    amount = None
+    txn_id = None
+    datetime = None
+
+    # Search amount
+    match = re.search(amount_pattern, text, re.IGNORECASE)
+    if match:
+        amount = match.group(2).replace(",", "")
+
+    # Search txn id
+    match = re.search(txn_pattern, text, re.IGNORECASE)
+    if match:
+        txn_id = match.group(2)
+
+    # Search date/time
+    match = re.search(datetime_pattern, text)
+    if match:
+        datetime = match.group(1)
+
+    if amount:
+        return {"amount": amount, "txn_id": txn_id, "datetime": datetime}
+    return None
+
+
+async def extract_text_from_image_bytes(image_bytes: bytes) -> str:
+    """
+    Use Google Vision OCR to extract text from image bytes.
+    """
+    if not client:
+        logger.error("Google Vision client not initialized.")
+        return ""
+
     try:
-        client = vision.ImageAnnotatorClient()
-        with open(image_path, 'rb') as image_file:
-            content = image_file.read()
-        image = vision.Image(content=content)
+        image = types.Image(content=image_bytes)
         response = client.text_detection(image=image)
-        texts = response.text_annotations
-        return texts[0].description if texts else ""
+        if response.error.message:
+            logger.error(f"OCR error: {response.error.message}")
+            return ""
+
+        return response.full_text_annotation.text
     except Exception as e:
-        return f"Google OCR error: {e}"
+        logger.error(f"Exception during OCR: {e}")
+        return ""
 
 
-def extract_text_from_image(file_bytes: bytes) -> str:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_file:
-        tmp_file.write(file_bytes)
-        tmp_file_path = tmp_file.name
+async def analyze_payment_screenshot(image_url: str):
+    """
+    Full pipeline:
+    - fetch image bytes
+    - extract text via OCR
+    - parse payment info
+    """
+    logger.info(f"Analyzing payment screenshot: {image_url}")
 
-    if OCR_PROVIDER.lower() == "tesseract":
-        extracted_text = extract_text_tesseract(tmp_file_path)
-    elif OCR_PROVIDER.lower() == "google":
-        extracted_text = extract_text_google(tmp_file_path)
-    else:
-        extracted_text = "Invalid OCR provider configuration."
+    image_bytes = await fetch_image_bytes(image_url)
+    if not image_bytes:
+        logger.warning("No image bytes fetched.")
+        return None
 
-    os.unlink(tmp_file_path)
-    return extracted_text
+    text = await extract_text_from_image_bytes(image_bytes)
+    if not text:
+        logger.warning("No text extracted from image.")
+        return None
 
+    payment_info = parse_payment_text(text)
+    if not payment_info:
+        logger.info("No valid payment info found in OCR text.")
+        return None
 
-def extract_payment_info(text: str) -> dict:
-    # Attempt to extract relevant data (Amount, Date, Transaction ID, UPI ID)
-    data = {}
-    amount_match = re.search(r'\b(?:INR|Rs\.?|₹)\s?(\d{1,5})\b', text, re.IGNORECASE)
-    if amount_match:
-        data['amount'] = int(amount_match.group(1))
-
-    txn_id_match = re.search(r'Txn(?:\s?ID)?[:\-\s]*([A-Z0-9]{6,})', text, re.IGNORECASE)
-    if txn_id_match:
-        data['txn_id'] = txn_id_match.group(1)
-
-    upi_match = re.search(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z]+\b', text)
-    if upi_match:
-        data['upi_id'] = upi_match.group(0)
-
-    return data
+    logger.debug(f"Extracted payment info: {payment_info}")
+    return payment_info
