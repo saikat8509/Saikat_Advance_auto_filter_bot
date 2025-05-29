@@ -1,58 +1,86 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+
 from bot.utils.database import db
 
-# You can replace or integrate any spelling correction library here
-# For this example, I'll use 'textblob' for spelling correction
-# If you want me to add a custom spell check or other, just say!
+# For spelling correction, using TextBlob or you can customize this.
+# Install via: pip install textblob
+from textblob import TextBlob
 
-try:
-    from textblob import TextBlob
-except ImportError:
-    # TextBlob not installed, install or use another library
-    pass
+# Optional: You can implement caching, user limits, or premium check with db
 
-@Client.on_message(filters.command("spellcheck") & filters.private)
-async def spellcheck_handler(client: Client, message: Message):
+@Client.on_message(filters.command("spelling") & filters.private)
+async def spelling_handler(client: Client, message: Message):
     """
-    Handler for /spellcheck command.
-    Corrects spelling errors in the provided text.
-    Usage: /spellcheck your text here
+    Handle /spelling command in private chat.
+    Usage: /spelling <text>
+    Replies with corrected spelling.
     """
-    if len(message.command) < 2:
-        await message.reply_text("❌ Please provide some text to spellcheck.\n\nUsage:\n/spellcheck your text here")
+
+    user_id = message.from_user.id
+    text = message.text
+
+    # Extract the text to check
+    parts = text.split(None, 1)
+    if len(parts) < 2:
+        await message.reply_text(
+            "Please provide the text to check.\n\nUsage: `/spelling your_text_here`",
+            parse_mode="markdown",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("Help", callback_data="help_spelling")]
+                ]
+            )
+        )
         return
 
-    text_to_check = message.text.split(None, 1)[1]
-
-    # Basic spell correction using TextBlob
-    try:
-        corrected_text = str(TextBlob(text_to_check).correct())
-    except Exception as e:
-        await message.reply_text(f"⚠️ An error occurred while checking spelling:\n{e}")
+    user_text = parts[1].strip()
+    if not user_text:
+        await message.reply_text("Please provide valid text to check spelling.")
         return
 
-    if corrected_text.lower() == text_to_check.lower():
-        reply = "✅ No spelling mistakes found!"
+    # Optional: Log user query or usage count
+    await db.add_user(user_id)  # make sure user is tracked
+
+    # Spell correction using TextBlob
+    blob = TextBlob(user_text)
+    corrected_text = str(blob.correct())
+
+    if corrected_text.lower() == user_text.lower():
+        reply_msg = "✅ No spelling mistakes found!"
     else:
-        reply = f"✏️ Corrected Text:\n\n{corrected_text}"
+        reply_msg = f"📝 **Original:** {user_text}\n\n✅ **Corrected:** {corrected_text}"
 
-    # Optional: Log user usage for stats (if you want)
-    await db.add_user(message.from_user.id)
-
-    await message.reply_text(reply)
-
-
-@Client.on_message(filters.command("spellhelp") & filters.private)
-async def spellhelp_handler(client: Client, message: Message):
-    """
-    Handler to show help for spelling commands.
-    """
-    help_text = (
-        "**Spellcheck Command Help**\n\n"
-        "Use the `/spellcheck` command followed by the text you want to check.\n\n"
-        "**Example:**\n"
-        "`/spellcheck This is a smple txt with errrs.`\n\n"
-        "The bot will reply with the corrected text."
+    # Reply with the result and buttons for support / groups / more help
+    buttons = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("Support Group", url="https://t.me/Leazy_support_group"),
+                InlineKeyboardButton("Movie Group", url="https://t.me/Creazy_Movie_Surch_Group")
+            ],
+            [
+                InlineKeyboardButton("Tutorial Channel", url="https://t.me/How_to_open_file_to_link"),
+                InlineKeyboardButton("Update Channel", url="https://t.me/creazy_announcement_hub")
+            ],
+        ]
     )
-    await message.reply_text(help_text)
+
+    await message.reply_text(reply_msg, parse_mode="markdown", reply_markup=buttons)
+
+
+# Optional: Callback query handler for help or buttons (if needed)
+@Client.on_callback_query(filters.regex("^help_spelling$"))
+async def help_spelling_callback(client: Client, callback_query):
+    await callback_query.answer()
+    await callback_query.message.edit_text(
+        "**Spelling Command Help**\n\n"
+        "Use `/spelling <text>` to check and correct spelling mistakes in your message.\n\n"
+        "Example:\n"
+        "`/spelling teh quik brown fox`\n"
+        "Will return corrected text.\n\n"
+        "If you need further assistance, join our Support Group.",
+        parse_mode="markdown",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Support Group", url="https://t.me/Leazy_support_group")]]
+        )
+    )
