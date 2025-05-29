@@ -1,77 +1,58 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from spellchecker import SpellChecker
+from pyrogram.types import Message
+from bot.utils.database import db
 
-# Initialize SpellChecker instance (English)
-spell = SpellChecker()
+# You can replace or integrate any spelling correction library here
+# For this example, I'll use 'textblob' for spelling correction
+# If you want me to add a custom spell check or other, just say!
 
-# Command: /spellcheck <text>
-# Usage: User sends /spellcheck followed by text to check spelling errors
+try:
+    from textblob import TextBlob
+except ImportError:
+    # TextBlob not installed, install or use another library
+    pass
+
 @Client.on_message(filters.command("spellcheck") & filters.private)
 async def spellcheck_handler(client: Client, message: Message):
-    # Extract text after command
-    text = message.text
-    parts = text.split(maxsplit=1)
-
-    if len(parts) < 2:
-        await message.reply_text("❗ Please provide text to check spelling.\n\nUsage:\n/spellcheck your text here")
+    """
+    Handler for /spellcheck command.
+    Corrects spelling errors in the provided text.
+    Usage: /spellcheck your text here
+    """
+    if len(message.command) < 2:
+        await message.reply_text("❌ Please provide some text to spellcheck.\n\nUsage:\n/spellcheck your text here")
         return
 
-    text_to_check = parts[1]
+    text_to_check = message.text.split(None, 1)[1]
 
-    # Tokenize words and find misspelled words
-    words = text_to_check.split()
-    misspelled = spell.unknown(words)
-
-    if not misspelled:
-        await message.reply_text("✅ No spelling mistakes found!")
+    # Basic spell correction using TextBlob
+    try:
+        corrected_text = str(TextBlob(text_to_check).correct())
+    except Exception as e:
+        await message.reply_text(f"⚠️ An error occurred while checking spelling:\n{e}")
         return
 
-    # Generate suggestions for each misspelled word
-    response = "**Spelling Check Results:**\n\n"
-    for word in misspelled:
-        suggestions = spell.candidates(word)
-        # Limit suggestions to top 3
-        suggestions = list(suggestions)[:3]
-        response += f"❌ `{word}`\n➡️ Suggestions: {', '.join(suggestions)}\n\n"
+    if corrected_text.lower() == text_to_check.lower():
+        reply = "✅ No spelling mistakes found!"
+    else:
+        reply = f"✏️ Corrected Text:\n\n{corrected_text}"
 
-    # Reply with inline button to usage tutorial if needed
-    await message.reply_text(
-        response,
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("📚 How to Use", url="https://t.me/How_to_open_file_to_link")]]
-        ),
-        parse_mode="md",
-        disable_web_page_preview=True
+    # Optional: Log user usage for stats (if you want)
+    await db.add_user(message.from_user.id)
+
+    await message.reply_text(reply)
+
+
+@Client.on_message(filters.command("spellhelp") & filters.private)
+async def spellhelp_handler(client: Client, message: Message):
+    """
+    Handler to show help for spelling commands.
+    """
+    help_text = (
+        "**Spellcheck Command Help**\n\n"
+        "Use the `/spellcheck` command followed by the text you want to check.\n\n"
+        "**Example:**\n"
+        "`/spellcheck This is a smple txt with errrs.`\n\n"
+        "The bot will reply with the corrected text."
     )
-
-# Optional: inline query support to suggest spelling corrections inline
-@Client.on_inline_query()
-async def inline_spell_suggestions(client: Client, inline_query):
-    query = inline_query.query.strip()
-    if not query:
-        await inline_query.answer(results=[], cache_time=0)
-        return
-
-    words = query.split()
-    misspelled = spell.unknown(words)
-    if not misspelled:
-        await inline_query.answer(results=[], cache_time=0)
-        return
-
-    from pyrogram.types import InlineQueryResultArticle, InputTextMessageContent
-
-    results = []
-    for word in misspelled:
-        suggestions = list(spell.candidates(word))[:3]
-        text = f"Suggestions for '{word}': {', '.join(suggestions)}"
-        results.append(
-            InlineQueryResultArticle(
-                title=f"Correct '{word}'",
-                input_message_content=InputTextMessageContent(text),
-                description=text,
-                thumb_url="https://graph.org/file/abcdef1234567890.png"  # Replace with relevant icon URL
-            )
-        )
-    await inline_query.answer(results=results, cache_time=30, is_personal=True)
-
+    await message.reply_text(help_text)
