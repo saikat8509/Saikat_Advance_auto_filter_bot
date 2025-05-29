@@ -1,78 +1,53 @@
-import os
-import re
-import pytesseract
-from PIL import Image
-from io import BytesIO
-from datetime import datetime
-from pyrogram import Client, filters
+# bot/handlers/payment_screenshot.py
+
+from pyrogram import filters, Client
 from pyrogram.types import Message
-
-from config import ENABLE_SCREENSHOT_AI, OCR_PROVIDER, PREMIUM_PLANS, ADMIN_ID
-from bot.utils.premium import add_premium_user
-from bot.utils.database import get_user_referrer, increment_referral_points
-
-# Regex to extract amount like ₹99 or INR 49
-AMOUNT_PATTERN = re.compile(r"(?:₹|INR)\s?(\d{2,4})")
+from config import ENABLE_SCREENSHOT_AI, OCR_PROVIDER, PREMIUM_PLANS
+from bot.utils.ocr import extract_payment_details
+from bot.utils.database import grant_premium
+from datetime import datetime, timedelta
+import re
 
 @Client.on_message(filters.private & filters.photo)
 async def handle_payment_screenshot(client: Client, message: Message):
     if not ENABLE_SCREENSHOT_AI or OCR_PROVIDER.lower() != "tesseract":
-        return  # Feature disabled or unsupported provider
-
-    if message.caption and "/verify" not in message.caption.lower():
+        # Feature is disabled in .env or unsupported OCR provider
         return
-
-    user_id = message.from_user.id
 
     try:
-        # Download and load image
-        file = await message.download(in_memory=True)
-        img = Image.open(BytesIO(file.getvalue()))
+        # Download image
+        file_path = await message.download()
 
-        # Extract text using Tesseract
-        text = pytesseract.image_to_string(img)
-    except Exception as e:
-        await message.reply_text("❌ Couldn't process the screenshot. Please try sending a clearer image.")
-        return
+        # Run OCR on image
+        ocr_result = extract_payment_details(file_path)
+        if not ocr_result:
+            await message.reply_text("❌ Failed to read payment details from the screenshot.")
+            return
 
-    # Search for a matching amount in the extracted text
-    match = AMOUNT_PATTERN.search(text)
-    if not match:
-        await message.reply_text("❌ Couldn't detect a valid payment amount in your screenshot.")
-        return
+        amount = ocr_result.get("amount")
+        txn_id = ocr_result.get("transaction_id")
+        payment_time = ocr_result.get("timestamp")
 
-    amount = int(match.group(1))
+        # Match amount to a plan
+        matched_plan = None
+        for days, details in PREMIUM_PLANS.items():
+            if int(details["price"]) == int(amount):
+                matched_plan = (int(days), details["label"])
+                break
 
-    # Identify the matched premium plan
-    matched_plan = None
-    for plan_id, plan in PREMIUM_PLANS.items():
-        if int(plan["price"]) == amount:
-            matched_plan = plan
-            break
+        if not matched_plan:
+            await message.reply_text("❌ Invalid payment amount. Please check our premium plans and try again.")
+            return
 
-    if not matched_plan:
-        await message.reply_text("❌ Payment amount detected, but it doesn't match any available premium plan.")
-        await client.send_message(
-            ADMIN_ID,
-            f"⚠️ Unmatched payment screenshot from [{message.from_user.first_name}](tg://user?id={user_id}).\n"
-            f"Detected amount: ₹{amount}"
+        # Grant premium if valid
+        duration_days, label = matched_plan
+        expiry_date = datetime.utcnow() + timedelta(days=duration_days)
+        await grant_premium(user_id=message.from_user.id, expiry=expiry_date)
+
+        await message.reply_text(
+            f"✅ Payment of ₹{amount} detected!\n\n🎉 You've been granted **{label} Premium** access until `{expiry_date.strftime('%Y-%m-%d')}`.\n\nThank you!"
         )
-        return
 
-    # Grant premium access
-    await add_premium_user(user_id, matched_plan["days"])
-
-    # Reward referral if exists
-    referrer_id = await get_user_referrer(user_id)
-    if referrer_id:
-        await increment_referral_points(referrer_id)
-
-    await message.reply_text(
-        f"✅ Payment verified successfully!\n\n🎉 You now have premium access for {matched_plan['days']} days!"
-    )
-
-    await client.send_message(
-        ADMIN_ID,
-        f"✅ Verified payment from [{message.from_user.first_name}](tg://user?id={user_id}).\n"
-        f"Plan: {matched_plan['label']} (₹{amount})"
-    )
+    except Exception as e:
+        await message.reply_text("⚠️ An error occurred while processing your screenshot.")
+        print(f"[Screenshot AI Error] {e}")
