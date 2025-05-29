@@ -41,4 +41,5 @@ RUN pip install --upgrade pip && \
 COPY . .
 
 # Default command
-CMD ["python", "bot/__main__.py"]
+CMD ["python", "bot/main.py"]
+
