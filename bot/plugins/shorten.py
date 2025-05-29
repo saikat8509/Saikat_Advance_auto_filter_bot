@@ -1,51 +1,61 @@
 # bot/plugins/shorten.py
 
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-from database.users import is_premium_user
-from utils.shortener import generate_short_url
-from utils.premium import get_premium_prompt
-from config import TUTORIAL_CHANNEL, SHORTEN_DOMAINS
+import httpx
+import logging
+from config import SHORTENER_APIS
 
-@Client.on_message(filters.private & filters.command("shorten"))
-async def shorten_handler(client: Client, message: Message):
-    user_id = message.from_user.id
-    args = message.text.split(" ", 1)
+logger = logging.getLogger(__name__)
 
-    if len(args) != 2:
-        return await message.reply_text(
-            "❗️ Send a valid command like:\n`/shorten https://example.com/longlink`",
-            quote=True
-        )
+# Mapping known shorteners to their API URLs and request data format
+SHORTENER_API_DETAILS = {
+    "shortzon": {
+        "api_url": "https://api.shortzon.com/v1/shorten",  # example URL
+        "headers": lambda api_key: {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        "json_data": lambda url: {"url": url},
+        "extract_short_url": lambda resp_json: resp_json.get("short_url") or resp_json.get("result"),
+    },
+    "try2link": {
+        "api_url": "https://api.try2link.com/shorten",  # example URL
+        "headers": lambda api_key: {"apikey": api_key},
+        "json_data": lambda url: {"long_url": url},
+        "extract_short_url": lambda resp_json: resp_json.get("short_link"),
+    },
+    # Add more shorteners here as needed
+}
 
-    original_url = args[1]
+async def shorten_url(url: str, service_name: str = None) -> str:
+    """
+    Shortens a URL using the configured shortener APIs from SHORTENER_APIS.
+    service_name is optional; defaults to the first available shortener.
+    """
+    if not SHORTENER_APIS:
+        logger.warning("No shortener API keys configured in SHORTENER_APIS.")
+        return url
 
-    # Check if user is premium
-    if await is_premium_user(user_id):
-        await message.reply_text(f"🚀 *Premium User*\nHere’s your direct link:\n{original_url}")
-        return
+    service_key = (service_name or next(iter(SHORTENER_APIS))).lower()
 
-    # Generate short link with token verification for non-premium user
-    short_url = await generate_short_url(original_url, user_id)
+    if service_key not in SHORTENER_APIS:
+        logger.warning(f"Shortener service '{service_key}' not configured with API key.")
+        return url
 
-    # Premium ad template (with graph.org image)
-    premium_message = get_premium_prompt()
+    api_key = SHORTENER_APIS[service_key]
 
-    await message.reply_photo(
-        photo="https://graph.org/file/123abc456def7890.png",  # Replace with your image
-        caption=(
-            f"**🔗 Your Shortened Link**\n\n"
-            f"{premium_message}\n\n"
-            f"🧷 Link: `{short_url}`\n\n"
-            f"⚡️ Fast | Safe | Tracked"
-        ),
-        reply_markup=InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("⬇️ Download Now", url=short_url)
-            ],
-            [
-                InlineKeyboardButton("🎖 Buy Premium", callback_data="buy_premium"),
-                InlineKeyboardButton("📽 How To Download", url=TUTORIAL_CHANNEL)
-            ]
-        ])
-    )
+    if service_key not in SHORTENER_API_DETAILS:
+        logger.warning(f"Shortener service '{service_key}' is not supported in code.")
+        return url
+
+    api_info = SHORTENER_API_DETAILS[service_key]
+    api_url = api_info["api_url"]
+    headers = api_info["headers"](api_key)
+    json_data = api_info["json_data"](url)
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(api_url, json=json_data, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            short_url = api_info["extract_short_url"](data)
+            return short_url or url
+    except Exception as e:
+        logger.error(f"Error shortening URL with {service_key}: {e}")
+        return url
